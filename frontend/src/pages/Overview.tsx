@@ -19,6 +19,7 @@ export function Overview() {
   const [health, setHealth] = useState<SystemHealth | null>(null);
   useEffect(() => {
     loadStatus().catch(console.error);
+    const refresh = window.setInterval(() => loadStatus().catch(console.error), 5000);
     Promise.all([incubatorApi.incubation(), incubatorApi.servo(), incubatorApi.heater(), incubatorApi.power(), incubatorApi.systemHealth()])
       .then(([incubationPayload, servoPayload, heaterPayload, powerPayload, healthPayload]) => {
         setIncubation(incubationPayload);
@@ -28,6 +29,7 @@ export function Overview() {
         setHealth(healthPayload);
       })
       .catch(console.error);
+    return () => window.clearInterval(refresh);
   }, [loadStatus]);
 
   if (!status) {

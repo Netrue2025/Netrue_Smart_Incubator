@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { incubatorApi } from "../api/client";
+import { getLiveWebSocketUrl, incubatorApi } from "../api/client";
 import type { Alert, HistoryPayload, StatusSnapshot } from "../types/incubator";
 
 interface IncubatorState {
@@ -56,7 +56,7 @@ export const useIncubatorStore = create<IncubatorState>((set, get) => ({
   },
   setStatus: (status) => set({ status }),
   connectLive: () => {
-    const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/live`);
+    const socket = new WebSocket(getLiveWebSocketUrl());
     socket.onopen = () => set({ connected: true });
     socket.onclose = () => set({ connected: false });
     socket.onmessage = (event) => {

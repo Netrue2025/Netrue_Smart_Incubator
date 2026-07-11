@@ -18,6 +18,7 @@ docs/      Installation, API, deployment, protocol, sync, troubleshooting
 3. Copy `firmware/include/secrets.example.h` to `firmware/include/secrets.h`, set WiFi and backend URL, then flash with PlatformIO.
 
 The ESP32 continues temperature control without WiFi and uploads queued readings when connectivity returns.
+For Vercel, keep FastAPI reachable through a public HTTPS backend URL or tunnel; the deployed dashboard reads ESP32 telemetry from that backend while local development still uses the Vite `/api` proxy.
 
 GPIO23 drives the fan relay. The firmware keeps the fan ON while humidity is above the target humidity; when humidity is equal to or below target, the fan follows the heater relay.
 

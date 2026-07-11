@@ -1,6 +1,6 @@
 import { RotateCcw, Save, Upload } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { incubatorApi } from "../api/client";
+import { getApiBaseUrl, getStoredApiBaseUrl, incubatorApi, normalizeApiBaseUrl, setApiBaseUrl } from "../api/client";
 import { useToast } from "../components/Toast";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -18,6 +18,7 @@ export function Settings() {
     temperature_offset: 0,
     humidity_offset: 0
   });
+  const [apiBaseInput, setApiBaseInput] = useState(() => getStoredApiBaseUrl());
   useEffect(() => {
     loadStatus().catch(console.error);
   }, [loadStatus]);
@@ -35,8 +36,39 @@ export function Settings() {
     await incubatorApi.restart();
     toast("Restart command queued");
   };
+  const saveConnection = async () => {
+    setApiBaseUrl(apiBaseInput);
+    toast("Backend connection saved");
+    window.setTimeout(() => window.location.reload(), 400);
+  };
   return (
     <form className="space-y-6" onSubmit={save}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Dashboard Connection</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-[1fr_auto]">
+          <label className="space-y-2 text-sm">
+            Backend API URL
+            <Input
+              placeholder="https://your-backend-domain.com"
+              value={apiBaseInput}
+              onChange={(e) => setApiBaseInput(e.target.value)}
+            />
+          </label>
+          <div className="flex items-end gap-3">
+            <Button type="button" onClick={saveConnection}>
+              <Save size={18} /> Save Connection
+            </Button>
+            <Button type="button" className="border border-border bg-muted text-foreground" onClick={() => setApiBaseInput("")}>
+              Local Default
+            </Button>
+          </div>
+          <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground/70 lg:col-span-2">
+            Active API: {normalizeApiBaseUrl(apiBaseInput || getApiBaseUrl())}
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Device Settings</CardTitle>

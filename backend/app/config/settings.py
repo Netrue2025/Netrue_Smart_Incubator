@@ -9,7 +9,12 @@ class Settings(BaseSettings):
     app_name: str = "Smart AI Incubator V2"
     api_prefix: str = "/api"
     database_url: str = Field(default="sqlite:///./data/incubator.db")
-    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://netrue-smart-incubator.vercel.app",
+    ]
+    cors_origin_regex: str | None = r"https://.*\.vercel\.app"
     firmware_version: str = "2.0.0"
     sync_interval_seconds: int = 10
     sensor_timeout_seconds: int = 8

@@ -32,7 +32,11 @@ variable before deploying:
 VITE_API_BASE_URL=https://your-backend-domain.com/api
 ```
 
-If you do not set it, the dashboard will call `/api` on the same domain.
+If you do not set it, the dashboard will call `/api` on the same domain. You can
+also open the deployed dashboard, go to Settings, and set **Backend API URL** at
+runtime. For a backend running on your local machine, expose `localhost:8000`
+through an HTTPS tunnel and use that public HTTPS URL in the deployed dashboard;
+the ESP32 may still use your LAN `BACKEND_URL`.
 
 ## Firmware
 

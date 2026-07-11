@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, BatteryCharging, CalendarDays, Flame, Gauge, H
 import { NavLink, Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { cn } from "../lib/utils";
+import { useIncubatorStore } from "../store/incubator";
 
 const nav = [
   { to: "/", label: "Overview", icon: Home },
@@ -21,10 +22,12 @@ const nav = [
 
 export function AppLayout() {
   const [dark, setDark] = useState(() => localStorage.theme === "dark");
+  const connectLive = useIncubatorStore((state) => state.connectLive);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     localStorage.theme = dark ? "dark" : "light";
   }, [dark]);
+  useEffect(() => connectLive(), [connectLive]);
   return (
     <div className="min-h-screen bg-background">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border bg-card lg:block">
