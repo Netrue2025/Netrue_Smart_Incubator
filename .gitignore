@@ -1,0 +1,13 @@
+backend/.venv/
+backend/.pythonlibs/
+backend/app/**/__pycache__/
+backend/data/*.db
+backend/data/*.db-*
+backend/uploads/*
+!backend/uploads/.gitkeep
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+firmware/.pio/
+.vscode/
+*.log
