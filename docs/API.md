@@ -45,6 +45,27 @@ For custom range, pass `start` and `end` ISO timestamps.
 
 Validated fields include target temperature, target humidity, tolerance, hysteresis, relay mode, tray servo settings, sampling interval, sync interval, calibration offsets, device name, and timezone. Firmware telemetry also reports `fan_relay` for the GPIO23 fan relay state.
 
+Firmware should call `GET /settings?firmware=true` so pending WiFi credentials
+are included for device provisioning. Normal dashboard reads do not include the
+saved WiFi password.
+
+## WiFi Provisioning
+
+- `POST /wifi/scan` queues an ESP32 WiFi scan.
+- `GET /wifi/networks` returns the latest SSIDs reported by the ESP32.
+- `POST /wifi/connect` stores the target SSID/password and queues a reconnect.
+- `POST /wifi/networks` is used by firmware to upload scan results.
+- `POST /wifi/status` is used by firmware to report connected SSID, IP, RSSI, and status.
+
+Example dashboard connect payload:
+
+```json
+{
+  "ssid": "IncubatorLab",
+  "password": "network-password"
+}
+```
+
 ## Relay
 
 `POST /relay`

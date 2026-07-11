@@ -11,6 +11,31 @@ cd backend
 
 Keep `backend/data` on persistent storage and back it up regularly.
 
+## Vercel Full-Stack Deployment
+
+The repository includes `api/index.py` so Vercel can route `/api/...` requests to
+the FastAPI app, while `frontend/dist` serves the dashboard.
+
+For production telemetry on Vercel, configure a persistent database. Do not rely
+on the default SQLite file for live ESP32 history on serverless hosting. Set this
+environment variable in Vercel:
+
+```text
+INCUBATOR_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
+```
+
+After deployment:
+
+```text
+Dashboard -> https://netrue-smart-incubator.vercel.app
+Backend API -> https://netrue-smart-incubator.vercel.app/api
+ESP32 BACKEND_URL -> https://netrue-smart-incubator.vercel.app
+```
+
+The dashboard polls `/api/status` every 5 seconds, so live data still refreshes
+on Vercel even if serverless WebSockets are not available. If you self-host the
+backend with Uvicorn, `/ws/live` remains available.
+
 ## Frontend
 
 ```powershell

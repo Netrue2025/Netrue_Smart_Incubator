@@ -9,7 +9,20 @@ from app.api.analytics import router as analytics_router
 from app.database.session import get_db
 from app.models.entities import Alert
 from app.queue.offline_queue import enqueue
-from app.schemas.api import AlertOut, ApiMessage, CalibrationIn, EnvironmentIn, EnvironmentOut, RelayCommand, SettingsIn, SettingsOut
+from app.schemas.api import (
+    AlertOut,
+    ApiMessage,
+    CalibrationIn,
+    EnvironmentIn,
+    EnvironmentOut,
+    RelayCommand,
+    SettingsIn,
+    SettingsOut,
+    WifiConnectIn,
+    WifiNetworkOut,
+    WifiNetworksIn,
+    WifiStatusIn,
+)
 from app.services.incubator import (
     apply_calibration,
     apply_relay_command,
@@ -18,9 +31,15 @@ from app.services.incubator import (
     ingest_environment,
     latest_reading,
     reading_to_payload,
+    request_wifi_scan,
     status_snapshot,
     system_snapshot,
+    save_wifi_credentials,
     update_settings,
+    update_wifi_networks,
+    update_wifi_status,
+    wifi_network_rows,
+    settings_to_payload,
 )
 
 router = APIRouter()
@@ -52,14 +71,39 @@ def history(
     return get_history(db, range, start, end)
 
 
-@router.get("/settings", response_model=SettingsOut)
-def get_settings(db: Session = Depends(get_db)) -> SettingsOut:
-    return get_or_create_settings(db)
+@router.get("/settings")
+def get_settings(firmware: bool = False, db: Session = Depends(get_db)) -> dict:
+    return settings_to_payload(get_or_create_settings(db), include_wifi_secret=firmware)
 
 
 @router.post("/settings", response_model=SettingsOut)
 def post_settings(payload: SettingsIn, db: Session = Depends(get_db)) -> SettingsOut:
     return update_settings(db, payload)
+
+
+@router.get("/wifi/networks", response_model=list[WifiNetworkOut])
+def wifi_networks(db: Session = Depends(get_db)) -> list:
+    return wifi_network_rows(db)
+
+
+@router.post("/wifi/scan", response_model=SettingsOut)
+def post_wifi_scan(db: Session = Depends(get_db)) -> SettingsOut:
+    return request_wifi_scan(db)
+
+
+@router.post("/wifi/connect", response_model=SettingsOut)
+def post_wifi_connect(payload: WifiConnectIn, db: Session = Depends(get_db)) -> SettingsOut:
+    return save_wifi_credentials(db, payload)
+
+
+@router.post("/wifi/networks", response_model=list[WifiNetworkOut])
+def post_wifi_networks(payload: WifiNetworksIn, db: Session = Depends(get_db)) -> list:
+    return update_wifi_networks(db, payload)
+
+
+@router.post("/wifi/status", response_model=SettingsOut)
+def post_wifi_status(payload: WifiStatusIn, db: Session = Depends(get_db)) -> SettingsOut:
+    return update_wifi_status(db, payload)
 
 
 @router.post("/relay", response_model=SettingsOut)

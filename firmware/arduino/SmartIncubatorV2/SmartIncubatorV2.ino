@@ -27,6 +27,8 @@ uint8_t sensorFailures = 0;
 uint32_t relayOnSince = 0;
 uint32_t lastWifiAttempt = 0;
 uint32_t lastWifiLog = 0;
+uint32_t lastWifiStatusPost = 0;
+uint8_t wifiConfiguredFailures = 0;
 uint32_t lastHistoryAppend = 0;
 bool displayReady = false;
 uint8_t activeOledAddress = OLED_I2C_ADDRESS;
@@ -351,10 +353,18 @@ void updateHeatingFaults(float temperature) {
 void connectWifi() {
   if (WiFi.status() == WL_CONNECTED || millis() - lastWifiAttempt < WIFI_RETRY_INTERVAL_MS) return;
   lastWifiAttempt = millis();
+  const bool hasConfiguredWifi = config.wifiSsid.length() > 0;
+  const bool useFallbackWifi = hasConfiguredWifi && wifiConfiguredFailures >= 6;
+  const String ssid = useFallbackWifi ? String(WIFI_SSID) : (hasConfiguredWifi ? config.wifiSsid : String(WIFI_SSID));
+  const String password = useFallbackWifi ? String(WIFI_PASSWORD) : (hasConfiguredWifi ? config.wifiPassword : String(WIFI_PASSWORD));
   WiFi.mode(WIFI_STA);
   Serial.print("Connecting WiFi SSID: ");
-  Serial.println(WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.println(ssid);
+  WiFi.disconnect(false);
+  WiFi.begin(ssid.c_str(), password.c_str());
+  if (hasConfiguredWifi && !useFallbackWifi) {
+    wifiConfiguredFailures++;
+  }
 }
 
 int postJson(const String& endpoint, const String& payload) {
@@ -373,6 +383,58 @@ bool httpSuccess(int code) {
   return code >= 200 && code < 300;
 }
 
+const char* wifiEncryptionName(wifi_auth_mode_t type) {
+  switch (type) {
+    case WIFI_AUTH_OPEN: return "open";
+    case WIFI_AUTH_WEP: return "wep";
+    case WIFI_AUTH_WPA_PSK: return "wpa";
+    case WIFI_AUTH_WPA2_PSK: return "wpa2";
+    case WIFI_AUTH_WPA_WPA2_PSK: return "wpa/wpa2";
+    case WIFI_AUTH_WPA2_ENTERPRISE: return "wpa2-enterprise";
+#ifdef WIFI_AUTH_WPA3_PSK
+    case WIFI_AUTH_WPA3_PSK: return "wpa3";
+#endif
+#ifdef WIFI_AUTH_WPA2_WPA3_PSK
+    case WIFI_AUTH_WPA2_WPA3_PSK: return "wpa2/wpa3";
+#endif
+    default: return "unknown";
+  }
+}
+
+void postWifiStatus(bool connected, const char* status) {
+  if (WiFi.status() != WL_CONNECTED) return;
+  JsonDocument doc;
+  doc["connected"] = connected;
+  doc["ssid"] = WiFi.SSID();
+  doc["ip_address"] = WiFi.localIP().toString();
+  doc["rssi"] = WiFi.RSSI();
+  doc["status"] = status;
+  String out;
+  serializeJson(doc, out);
+  postJson("/api/wifi/status", out);
+}
+
+void scanAndPostWifiNetworks() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  Serial.println("Scanning WiFi networks...");
+  int count = WiFi.scanNetworks(false, true);
+  JsonDocument doc;
+  JsonArray networks = doc["networks"].to<JsonArray>();
+  for (int i = 0; i < count && i < 20; i++) {
+    JsonObject item = networks.add<JsonObject>();
+    item["ssid"] = WiFi.SSID(i);
+    item["rssi"] = WiFi.RSSI(i);
+    item["encryption"] = wifiEncryptionName(WiFi.encryptionType(i));
+    item["channel"] = WiFi.channel(i);
+  }
+  String out;
+  serializeJson(doc, out);
+  postJson("/api/wifi/networks", out);
+  WiFi.scanDelete();
+  config.wifiScanRequested = false;
+  saveConfig(config);
+}
+
 void applyRemoteConfig(JsonDocument& doc) {
   String updatedAt = doc["updated_at"] | "";
   if (updatedAt.length() && config.updatedAt.length() && updatedAt <= config.updatedAt) return;
@@ -388,6 +450,25 @@ void applyRemoteConfig(JsonDocument& doc) {
   config.trayServoAngle = constrain((int)(doc["tray_servo_angle"] | config.trayServoAngle), 0, 180);
   config.trayServoIntervalMinutes = constrain((int)(doc["tray_servo_interval_minutes"] | config.trayServoIntervalMinutes), 1, 720);
   config.trayServoSpeedDps = constrain((int)(doc["tray_servo_speed_dps"] | config.trayServoSpeedDps), 1, 30);
+  const bool scanRequested = doc["wifi_scan_requested"] | false;
+  const bool connectRequested = doc["wifi_connect_requested"] | false;
+  String nextWifiSsid = String((const char*)(doc["wifi_ssid"] | ""));
+  String nextWifiPassword = String((const char*)(doc["wifi_password"] | ""));
+  nextWifiSsid.trim();
+  if (scanRequested) {
+    config.wifiScanRequested = true;
+  }
+  if (connectRequested && nextWifiSsid.length() > 0) {
+    const bool changed = nextWifiSsid != config.wifiSsid || nextWifiPassword != config.wifiPassword;
+    config.wifiSsid = nextWifiSsid;
+    config.wifiPassword = nextWifiPassword;
+    config.wifiConnectRequested = true;
+    wifiConfiguredFailures = 0;
+    if (changed || WiFi.SSID() != config.wifiSsid) {
+      WiFi.disconnect(false);
+      lastWifiAttempt = 0;
+    }
+  }
   config.relayMode = String((const char*)(doc["relay_mode"] | config.relayMode.c_str()));
   config.relayMode.trim();
   config.relayMode.toUpperCase();
@@ -398,14 +479,24 @@ void applyRemoteConfig(JsonDocument& doc) {
 void fetchCommands() {
   if (WiFi.status() != WL_CONNECTED) return;
   HTTPClient http;
-  http.begin(String(BACKEND_URL) + "/api/settings");
+  http.begin(String(BACKEND_URL) + "/api/settings?firmware=true");
   http.setTimeout(1500);
   int code = http.GET();
   Serial.printf("GET /api/settings -> HTTP %d\n", code);
   if (code == 200) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getString());
-    if (!error) applyRemoteConfig(doc);
+    if (!error) {
+      applyRemoteConfig(doc);
+      if (config.wifiScanRequested) {
+        scanAndPostWifiNetworks();
+      }
+      if (config.wifiConnectRequested && config.wifiSsid.length() > 0) {
+        postWifiStatus(WiFi.SSID() == config.wifiSsid, WiFi.SSID() == config.wifiSsid ? "connected" : "pending");
+        config.wifiConnectRequested = false;
+        saveConfig(config);
+      }
+    }
   }
   http.end();
 }
@@ -707,6 +798,13 @@ void syncTask(void*) {
       Serial.println(WiFi.localIP());
       Serial.print("Backend URL: ");
       Serial.println(BACKEND_URL);
+      if (config.wifiSsid.length() > 0 && WiFi.SSID() == config.wifiSsid) {
+        wifiConfiguredFailures = 0;
+      }
+    }
+    if (WiFi.status() == WL_CONNECTED && millis() - lastWifiStatusPost > 30000) {
+      lastWifiStatusPost = millis();
+      postWifiStatus(true, "connected");
     }
     Reading uploadReading;
     bool hasUpload = false;

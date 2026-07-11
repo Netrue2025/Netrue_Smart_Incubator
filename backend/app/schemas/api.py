@@ -58,6 +58,10 @@ class SettingsIn(BaseModel):
     tray_servo_angle: int | None = Field(default=None, ge=0, le=180)
     tray_servo_interval_minutes: int | None = Field(default=None, ge=1, le=720)
     tray_servo_speed_dps: int | None = Field(default=None, ge=1, le=30)
+    wifi_ssid: str | None = Field(default=None, max_length=80)
+    wifi_password: str | None = Field(default=None, max_length=128)
+    wifi_scan_requested: bool | None = None
+    wifi_connect_requested: bool | None = None
     timestamp: datetime = Field(default_factory=utc_now)
 
     @field_validator("relay_mode", mode="before")
@@ -85,6 +89,16 @@ class SettingsOut(BaseModel):
     tray_servo_angle: int
     tray_servo_interval_minutes: int
     tray_servo_speed_dps: int
+    wifi_ssid: str | None
+    wifi_password_set: bool
+    wifi_scan_requested: bool
+    wifi_connect_requested: bool
+    wifi_active_ssid: str | None
+    wifi_ip_address: str | None
+    wifi_rssi: int | None
+    wifi_connection_status: str
+    wifi_last_scan_at: datetime | None
+    wifi_last_connect_at: datetime | None
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -127,3 +141,37 @@ class HistoryFilter(BaseModel):
 class ApiMessage(BaseModel):
     ok: bool = True
     message: str
+
+
+class WifiConnectIn(BaseModel):
+    ssid: str = Field(min_length=1, max_length=80)
+    password: str = Field(default="", max_length=128)
+    timestamp: datetime = Field(default_factory=utc_now)
+
+
+class WifiNetworkIn(BaseModel):
+    ssid: str = Field(min_length=1, max_length=80)
+    rssi: int = 0
+    encryption: str = Field(default="unknown", max_length=40)
+    channel: int | None = None
+
+
+class WifiNetworksIn(BaseModel):
+    networks: list[WifiNetworkIn] = Field(default_factory=list)
+    timestamp: datetime = Field(default_factory=utc_now)
+
+
+class WifiNetworkOut(WifiNetworkIn):
+    id: int
+    last_seen_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WifiStatusIn(BaseModel):
+    connected: bool = False
+    ssid: str | None = Field(default=None, max_length=80)
+    ip_address: str | None = Field(default=None, max_length=45)
+    rssi: int | None = None
+    status: str = Field(default="unknown", max_length=40)
+    timestamp: datetime = Field(default_factory=utc_now)

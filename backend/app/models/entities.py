@@ -60,7 +60,32 @@ class DeviceSettings(Base):
     tray_servo_angle: Mapped[int] = mapped_column(Integer, default=45)
     tray_servo_interval_minutes: Mapped[int] = mapped_column(Integer, default=120)
     tray_servo_speed_dps: Mapped[int] = mapped_column(Integer, default=6)
+    wifi_ssid: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    wifi_password: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    wifi_scan_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    wifi_connect_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    wifi_active_ssid: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    wifi_ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    wifi_rssi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    wifi_connection_status: Mapped[str] = mapped_column(String(40), default="not_configured")
+    wifi_last_scan_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    wifi_last_connect_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+
+    @property
+    def wifi_password_set(self) -> bool:
+        return bool(self.wifi_password)
+
+
+class WifiNetwork(Base):
+    __tablename__ = "wifi_networks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    ssid: Mapped[str] = mapped_column(String(80), index=True)
+    rssi: Mapped[int] = mapped_column(Integer, default=0)
+    encryption: Mapped[str] = mapped_column(String(40), default="unknown")
+    channel: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
 
 
 class Alert(Base):

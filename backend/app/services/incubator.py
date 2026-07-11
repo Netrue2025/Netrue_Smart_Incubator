@@ -5,9 +5,9 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
-from app.models.entities import Alert, DeviceSettings, EventLog, RelayEvent, SensorReading, now_utc
+from app.models.entities import Alert, DeviceSettings, EventLog, RelayEvent, SensorReading, WifiNetwork, now_utc
 from app.queue.offline_queue import enqueue, pending_count
-from app.schemas.api import CalibrationIn, EnvironmentIn, RelayCommand, SettingsIn
+from app.schemas.api import CalibrationIn, EnvironmentIn, RelayCommand, SettingsIn, WifiConnectIn, WifiNetworksIn, WifiStatusIn
 from app.utils.time import ensure_aware_utc
 
 
@@ -145,8 +145,8 @@ def reading_to_payload(reading: SensorReading | None) -> dict[str, Any] | None:
     }
 
 
-def settings_to_payload(settings: DeviceSettings) -> dict[str, Any]:
-    return {
+def settings_to_payload(settings: DeviceSettings, include_wifi_secret: bool = False) -> dict[str, Any]:
+    payload = {
         "id": settings.id,
         "device_name": settings.device_name,
         "timezone": settings.timezone,
@@ -165,8 +165,87 @@ def settings_to_payload(settings: DeviceSettings) -> dict[str, Any]:
         "tray_servo_angle": settings.tray_servo_angle,
         "tray_servo_interval_minutes": settings.tray_servo_interval_minutes,
         "tray_servo_speed_dps": settings.tray_servo_speed_dps,
+        "wifi_ssid": settings.wifi_ssid,
+        "wifi_password_set": settings.wifi_password_set,
+        "wifi_scan_requested": settings.wifi_scan_requested,
+        "wifi_connect_requested": settings.wifi_connect_requested,
+        "wifi_active_ssid": settings.wifi_active_ssid,
+        "wifi_ip_address": settings.wifi_ip_address,
+        "wifi_rssi": settings.wifi_rssi,
+        "wifi_connection_status": settings.wifi_connection_status,
+        "wifi_last_scan_at": settings.wifi_last_scan_at,
+        "wifi_last_connect_at": settings.wifi_last_connect_at,
         "updated_at": settings.updated_at,
     }
+    if include_wifi_secret:
+        payload["wifi_password"] = settings.wifi_password or ""
+    return payload
+
+
+def request_wifi_scan(db: Session) -> DeviceSettings:
+    settings = get_or_create_settings(db)
+    settings.wifi_scan_requested = True
+    settings.updated_at = now_utc()
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    enqueue(db, "outgoing", "wifi_scan", {"command": "wifi_scan", "timestamp": settings.updated_at.isoformat()})
+    create_event(db, "wifi_scan_requested", "WiFi scan requested from dashboard")
+    return settings
+
+
+def save_wifi_credentials(db: Session, payload: WifiConnectIn) -> DeviceSettings:
+    settings = get_or_create_settings(db)
+    password = payload.password if payload.password or payload.ssid != settings.wifi_ssid else settings.wifi_password
+    settings.wifi_ssid = payload.ssid
+    settings.wifi_password = password
+    settings.wifi_connect_requested = True
+    settings.wifi_scan_requested = False
+    settings.wifi_connection_status = "pending"
+    settings.updated_at = ensure_aware_utc(payload.timestamp)
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    enqueue(db, "outgoing", "wifi_connect", {"ssid": payload.ssid, "timestamp": settings.updated_at.isoformat()})
+    create_event(db, "wifi_credentials_updated", f"WiFi target changed to {payload.ssid}")
+    return settings
+
+
+def update_wifi_networks(db: Session, payload: WifiNetworksIn) -> list[WifiNetwork]:
+    seen_at = ensure_aware_utc(payload.timestamp)
+    db.query(WifiNetwork).delete()
+    rows = [
+        WifiNetwork(ssid=item.ssid, rssi=item.rssi, encryption=item.encryption, channel=item.channel, last_seen_at=seen_at)
+        for item in payload.networks
+    ]
+    db.add_all(rows)
+    settings = get_or_create_settings(db)
+    settings.wifi_scan_requested = False
+    settings.wifi_last_scan_at = seen_at
+    db.add(settings)
+    db.commit()
+    create_event(db, "wifi_scan_completed", f"ESP32 reported {len(rows)} WiFi network(s)")
+    return wifi_network_rows(db)
+
+
+def update_wifi_status(db: Session, payload: WifiStatusIn) -> DeviceSettings:
+    settings = get_or_create_settings(db)
+    status_at = ensure_aware_utc(payload.timestamp)
+    settings.wifi_active_ssid = payload.ssid
+    settings.wifi_ip_address = payload.ip_address
+    settings.wifi_rssi = payload.rssi
+    settings.wifi_connection_status = "connected" if payload.connected else payload.status
+    settings.wifi_connect_requested = False
+    settings.wifi_last_connect_at = status_at
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    create_event(db, "wifi_status", f"ESP32 WiFi status: {settings.wifi_connection_status}")
+    return settings
+
+
+def wifi_network_rows(db: Session) -> list[WifiNetwork]:
+    return db.scalars(select(WifiNetwork).order_by(desc(WifiNetwork.rssi), WifiNetwork.ssid)).all()
 
 
 def apply_relay_command(db: Session, command: RelayCommand) -> DeviceSettings:
@@ -235,6 +314,10 @@ def status_snapshot(db: Session) -> dict[str, Any]:
             "last_sync": current_reading.created_at if current_reading else None,
             "wifi": current_reading.wifi if current_reading else False,
             "sync_status": current_reading.sync_status if current_reading else "waiting",
+            "wifi_ssid": settings.wifi_active_ssid,
+            "wifi_ip_address": settings.wifi_ip_address,
+            "wifi_rssi": settings.wifi_rssi,
+            "wifi_connection_status": settings.wifi_connection_status,
         },
         "backend": {"online": True, "database": "ok", "readings": database_count, "queue_size": pending_count(db)},
         "environment": reading_to_payload(current_reading),

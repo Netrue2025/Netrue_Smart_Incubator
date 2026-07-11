@@ -11,11 +11,9 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(
-    get_settings().database_url,
-    connect_args={"check_same_thread": False},
-    future=True,
-)
+database_url = get_settings().database_url
+connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+engine = create_engine(database_url, connect_args=connect_args, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
@@ -38,6 +36,16 @@ def ensure_device_settings_columns() -> None:
         "tray_servo_angle": "INTEGER NOT NULL DEFAULT 45",
         "tray_servo_interval_minutes": "INTEGER NOT NULL DEFAULT 120",
         "tray_servo_speed_dps": "INTEGER NOT NULL DEFAULT 6",
+        "wifi_ssid": "VARCHAR(80)",
+        "wifi_password": "VARCHAR(128)",
+        "wifi_scan_requested": "BOOLEAN NOT NULL DEFAULT 0",
+        "wifi_connect_requested": "BOOLEAN NOT NULL DEFAULT 0",
+        "wifi_active_ssid": "VARCHAR(80)",
+        "wifi_ip_address": "VARCHAR(45)",
+        "wifi_rssi": "INTEGER",
+        "wifi_connection_status": "VARCHAR(40) NOT NULL DEFAULT 'not_configured'",
+        "wifi_last_scan_at": "DATETIME",
+        "wifi_last_connect_at": "DATETIME",
     }
     with engine.begin() as connection:
         for name, definition in additions.items():

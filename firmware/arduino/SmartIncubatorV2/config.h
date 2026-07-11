@@ -79,6 +79,10 @@ struct IncubatorConfig {
   int trayServoAngle = 45;
   int trayServoIntervalMinutes = 120;
   int trayServoSpeedDps = 6;
+  String wifiSsid = "";
+  String wifiPassword = "";
+  bool wifiScanRequested = false;
+  bool wifiConnectRequested = false;
   String relayMode = "AUTO";
   String updatedAt = "";
 };

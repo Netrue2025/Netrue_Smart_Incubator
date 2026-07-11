@@ -23,7 +23,20 @@ Open `http://localhost:5173`.
 
 This project keeps the web dashboard inside `frontend/`. The root `vercel.json`
 configures Vercel to install dependencies in that folder, run the Vite build,
-and publish `frontend/dist`.
+publish `frontend/dist`, and route `/api/...` to the FastAPI app through
+`api/index.py`.
+
+For a full Vercel deployment, set a persistent database URL:
+
+```text
+INCUBATOR_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
+```
+
+Then set the ESP32 firmware backend URL to the deployed Vercel origin:
+
+```cpp
+#define BACKEND_URL "https://netrue-smart-incubator.vercel.app"
+```
 
 If the FastAPI backend is hosted on another server, add this Vercel environment
 variable before deploying:

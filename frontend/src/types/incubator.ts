@@ -33,6 +33,16 @@ export interface Settings {
   tray_servo_angle: number;
   tray_servo_interval_minutes: number;
   tray_servo_speed_dps: number;
+  wifi_ssid: string | null;
+  wifi_password_set: boolean;
+  wifi_scan_requested: boolean;
+  wifi_connect_requested: boolean;
+  wifi_active_ssid: string | null;
+  wifi_ip_address: string | null;
+  wifi_rssi: number | null;
+  wifi_connection_status: string;
+  wifi_last_scan_at: string | null;
+  wifi_last_connect_at: string | null;
   updated_at: string;
 }
 
@@ -52,6 +62,10 @@ export interface StatusSnapshot {
     last_sync: string | null;
     wifi: boolean;
     sync_status: string;
+    wifi_ssid?: string | null;
+    wifi_ip_address?: string | null;
+    wifi_rssi?: number | null;
+    wifi_connection_status?: string;
   };
   backend: {
     online: boolean;
@@ -62,6 +76,15 @@ export interface StatusSnapshot {
   environment: Reading | null;
   settings: Settings;
   time: string;
+}
+
+export interface WifiNetwork {
+  id: number;
+  ssid: string;
+  rssi: number;
+  encryption: string;
+  channel: number | null;
+  last_seen_at: string;
 }
 
 export interface HistoryPayload {

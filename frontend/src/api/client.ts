@@ -10,7 +10,8 @@ import type {
   ServoAnalytics,
   Settings,
   StatusSnapshot,
-  SystemHealth
+  SystemHealth,
+  WifiNetwork
 } from "../types/incubator";
 
 const API_BASE_STORAGE_KEY = "smart-incubator-api-base-url";
@@ -79,6 +80,9 @@ export const incubatorApi = {
   status: () => api.get<StatusSnapshot>("/status").then((r) => r.data),
   settings: () => api.get<Settings>("/settings").then((r) => r.data),
   saveSettings: (payload: Partial<Settings> & { timestamp?: string }) => api.post<Settings>("/settings", payload).then((r) => r.data),
+  wifiNetworks: () => api.get<WifiNetwork[]>("/wifi/networks").then((r) => r.data),
+  requestWifiScan: () => api.post<Settings>("/wifi/scan").then((r) => r.data),
+  connectWifi: (ssid: string, password: string) => api.post<Settings>("/wifi/connect", { ssid, password, timestamp: new Date().toISOString() }).then((r) => r.data),
   relay: (mode: RelayMode, relay: boolean, reason = "operator command") => api.post<Settings>("/relay", { mode, relay, reason }).then((r) => r.data),
   history: (range = "today") => api.get<HistoryPayload>("/history", { params: { range } }).then((r) => r.data),
   alerts: () => api.get<Alert[]>("/alerts").then((r) => r.data),

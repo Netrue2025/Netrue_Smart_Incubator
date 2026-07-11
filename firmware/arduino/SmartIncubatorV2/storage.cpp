@@ -45,6 +45,10 @@ void saveConfig(const IncubatorConfig& config) {
   prefs.putInt("trayServoAng", config.trayServoAngle);
   prefs.putInt("trayServoInt", config.trayServoIntervalMinutes);
   prefs.putInt("trayServoSpd", config.trayServoSpeedDps);
+  prefs.putString("wifiSsid", config.wifiSsid);
+  prefs.putString("wifiPass", config.wifiPassword);
+  prefs.putBool("wifiScanReq", config.wifiScanRequested);
+  prefs.putBool("wifiConnReq", config.wifiConnectRequested);
   prefs.putString("relayMode", config.relayMode);
   prefs.putString("updatedAt", config.updatedAt);
 }
@@ -63,6 +67,10 @@ IncubatorConfig loadConfig() {
   config.trayServoAngle = prefs.getInt("trayServoAng", config.trayServoAngle);
   config.trayServoIntervalMinutes = prefs.getInt("trayServoInt", config.trayServoIntervalMinutes);
   config.trayServoSpeedDps = prefs.getInt("trayServoSpd", config.trayServoSpeedDps);
+  config.wifiSsid = prefs.getString("wifiSsid", config.wifiSsid);
+  config.wifiPassword = prefs.getString("wifiPass", config.wifiPassword);
+  config.wifiScanRequested = prefs.getBool("wifiScanReq", config.wifiScanRequested);
+  config.wifiConnectRequested = prefs.getBool("wifiConnReq", config.wifiConnectRequested);
   config.relayMode = prefs.getString("relayMode", config.relayMode);
   config.updatedAt = prefs.getString("updatedAt", config.updatedAt);
   return config;
