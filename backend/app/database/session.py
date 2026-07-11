@@ -25,6 +25,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_device_settings_columns()
     ensure_sensor_reading_columns()
+    ensure_power_config_columns()
 
 
 def ensure_device_settings_columns() -> None:
@@ -56,6 +57,32 @@ def ensure_sensor_reading_columns() -> None:
         for name, definition in additions.items():
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE sensor_readings ADD COLUMN {name} {definition}"))
+
+
+def ensure_power_config_columns() -> None:
+    inspector = inspect(engine)
+    if "power_config" not in inspector.get_table_names():
+        return
+    existing = {column["name"] for column in inspector.get_columns("power_config")}
+    additions = {
+        "servo_average_watts": "FLOAT NOT NULL DEFAULT 0.1",
+        "lcd_watts": "FLOAT NOT NULL DEFAULT 0.5",
+        "relay_watts": "FLOAT NOT NULL DEFAULT 0.4",
+        "dht22_watts": "FLOAT NOT NULL DEFAULT 0.02",
+        "buzzer_watts": "FLOAT NOT NULL DEFAULT 0.0",
+        "battery_backup_enabled": "BOOLEAN NOT NULL DEFAULT 0",
+        "battery_voltage": "FLOAT NOT NULL DEFAULT 12.0",
+        "battery_capacity_ah": "FLOAT NOT NULL DEFAULT 100.0",
+        "battery_charge_percent": "FLOAT NOT NULL DEFAULT 100.0",
+        "battery_health_percent": "FLOAT NOT NULL DEFAULT 100.0",
+        "battery_usable_percent": "FLOAT NOT NULL DEFAULT 60.0",
+        "inverter_efficiency_percent": "FLOAT NOT NULL DEFAULT 88.0",
+        "battery_chemistry": "VARCHAR(40) NOT NULL DEFAULT 'Lead Acid'",
+    }
+    with engine.begin() as connection:
+        for name, definition in additions.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE power_config ADD COLUMN {name} {definition}"))
 
 
 def get_db() -> Generator[Session, None, None]:

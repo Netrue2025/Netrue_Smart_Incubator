@@ -14,7 +14,7 @@ import type {
 } from "../types/incubator";
 
 export const api = axios.create({
-  baseURL: "/api",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
   timeout: 8000
 });
 

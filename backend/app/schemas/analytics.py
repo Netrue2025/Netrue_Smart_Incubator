@@ -100,11 +100,23 @@ class PowerConfigIn(BaseModel):
     fan_watts: float = Field(ge=0, le=500)
     controller_watts: float = Field(ge=0, le=500)
     servo_watts: float = Field(ge=0, le=500)
+    servo_average_watts: float = Field(default=0.1, ge=0, le=100)
+    lcd_watts: float = Field(default=0.5, ge=0, le=100)
+    relay_watts: float = Field(default=0.4, ge=0, le=100)
+    dht22_watts: float = Field(default=0.02, ge=0, le=20)
+    buzzer_watts: float = Field(default=0.0, ge=0, le=100)
     grid_voltage: float = Field(ge=1, le=500)
     tariff_per_kwh: float = Field(ge=0, le=100000)
+    battery_backup_enabled: bool = False
+    battery_voltage: float = Field(default=12.0, ge=1, le=500)
+    battery_capacity_ah: float = Field(default=100.0, ge=0, le=100000)
+    battery_charge_percent: float = Field(default=100.0, ge=0, le=100)
+    battery_health_percent: float = Field(default=100.0, ge=0, le=100)
+    battery_usable_percent: float = Field(default=60.0, ge=0, le=100)
+    inverter_efficiency_percent: float = Field(default=88.0, ge=1, le=100)
+    battery_chemistry: str = Field(default="Lead Acid", max_length=40)
 
 
 class AlarmPatch(BaseModel):
     resolved: bool | None = None
     muted: bool | None = None
-

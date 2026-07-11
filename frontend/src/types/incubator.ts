@@ -138,8 +138,21 @@ export interface PowerSummary {
     fan_watts: number;
     controller_watts: number;
     servo_watts: number;
+    servo_average_watts: number;
+    lcd_watts: number;
+    relay_watts: number;
+    dht22_watts: number;
+    buzzer_watts: number;
     grid_voltage: number;
     tariff_per_kwh: number;
+    battery_backup_enabled: boolean;
+    battery_voltage: number;
+    battery_capacity_ah: number;
+    battery_charge_percent: number;
+    battery_health_percent: number;
+    battery_usable_percent: number;
+    inverter_efficiency_percent: number;
+    battery_chemistry: string;
     updated_at: string;
   };
   window_hours: number;
@@ -151,6 +164,67 @@ export interface PowerSummary {
   estimated_current_amps: number;
   heater_runtime_minutes: number;
   heater_cycles: number;
+  live_load_watts: number;
+  average_load_watts: number;
+  peak_load_watts: number;
+  energy_last_hour_wh: number;
+  energy_current_hour_wh: number;
+  energy_today_wh: number;
+  heater_duty_last_hour_percent: number;
+  heater_duty_current_hour_percent: number;
+  last_completed_hour_start: string;
+  last_completed_hour_end: string;
+  last_completed_hour_label: string;
+  current_hour_start: string;
+  current_hour_label: string;
+  rtc_time: string;
+  battery: {
+    energy_wh: number;
+    runtime_hours: number | null;
+    recharge_before: string | null;
+    severity: "ok" | "warning" | "critical" | "unknown";
+    basis_average_watts?: number;
+    sample_count?: number;
+    confidence?: "ok" | "low";
+  };
+  recharge_before: string | null;
+  live: {
+    heater_state: "ON" | "OFF";
+    heater_on: boolean;
+    heater_on_time: string | null;
+    heater_off_time: string | null;
+    temperature: number | null;
+    humidity: number | null;
+    fan_on: boolean;
+    servo_status: string;
+    servo_active: boolean;
+    buzzer_active: boolean;
+  };
+  hourly_history: Array<{
+    hour: string;
+    created_at: string;
+    energy_wh: number;
+    average_load_watts: number;
+    heater_duty_percent: number;
+    battery_percent: number;
+  }>;
+  report: {
+    title: string;
+    date: string;
+    battery: PowerSummary["config"];
+    summary: {
+      total_energy_used_wh: number;
+      average_load_watts: number;
+      peak_load_watts: number;
+      average_heater_duty_percent: number;
+      last_hour_energy_wh?: number;
+      current_hour_energy_wh?: number;
+      last_completed_hour_label?: string;
+      current_hour_label?: string;
+      estimated_runtime_hours: number | null;
+    };
+    hourly_table: PowerSummary["hourly_history"];
+  };
 }
 
 export interface SystemHealth {

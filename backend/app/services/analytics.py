@@ -21,6 +21,7 @@ from app.models.entities import (
 from app.queue.offline_queue import pending_count
 from app.schemas.analytics import IncubationProfileIn, IncubationProfilePatch, PowerConfigIn, ServoEventIn
 from app.services.incubator import get_or_create_settings, latest_reading
+from app.services.power_service import PowerService
 from app.utils.time import ensure_aware_utc
 
 
@@ -116,6 +117,23 @@ def update_profile(db: Session, profile_id: int, payload: IncubationProfilePatch
 def get_power_config(db: Session) -> PowerConfig:
     config = db.get(PowerConfig, 1)
     if config:
+        changed = False
+        if config.fan_watts == 2.5:
+            config.fan_watts = 3.0
+            changed = True
+        if config.controller_watts == 3.0:
+            config.controller_watts = 1.0
+            changed = True
+        if getattr(config, "servo_average_watts", 0.0) == 0.0:
+            config.servo_average_watts = 0.1
+            changed = True
+        if config.buzzer_watts == 0.5:
+            config.buzzer_watts = 0.0
+            changed = True
+        if changed:
+            db.add(config)
+            db.commit()
+            db.refresh(config)
         return config
     config = PowerConfig(id=1)
     db.add(config)
@@ -231,39 +249,7 @@ def record_servo_event(db: Session, payload: ServoEventIn) -> dict[str, Any]:
 
 
 def power_summary(db: Session) -> dict[str, Any]:
-    config = get_power_config(db)
-    now = datetime.now(timezone.utc)
-    begin = now - timedelta(hours=24)
-    heater = relay_runtime(db, begin, now)
-    settings = get_or_create_settings(db)
-    servo_cycles = int(1440 / max(1, settings.tray_servo_interval_minutes)) if settings.tray_servo_enabled else 0
-    servo_seconds = servo_cycles * max(1, settings.tray_servo_angle * 2 / max(1, settings.tray_servo_speed_dps))
-    heater_kwh = (config.heater_watts * heater["seconds"]) / 3600000
-    base_kwh = ((config.fan_watts + config.controller_watts) * 24) / 1000
-    servo_kwh = (config.servo_watts * servo_seconds) / 3600000
-    total_kwh = heater_kwh + base_kwh + servo_kwh
-    active_watts = config.fan_watts + config.controller_watts + (config.heater_watts if heater["currently_on"] else 0)
-    estimated_current = active_watts / max(1, config.grid_voltage)
-    return {
-        "config": {
-            "heater_watts": config.heater_watts,
-            "fan_watts": config.fan_watts,
-            "controller_watts": config.controller_watts,
-            "servo_watts": config.servo_watts,
-            "grid_voltage": config.grid_voltage,
-            "tariff_per_kwh": config.tariff_per_kwh,
-            "updated_at": config.updated_at,
-        },
-        "window_hours": 24,
-        "heater_kwh": round(heater_kwh, 4),
-        "base_kwh": round(base_kwh, 4),
-        "servo_kwh": round(servo_kwh, 4),
-        "total_kwh": round(total_kwh, 4),
-        "estimated_cost": round(total_kwh * config.tariff_per_kwh, 2),
-        "estimated_current_amps": round(estimated_current, 3),
-        "heater_runtime_minutes": round(heater["seconds"] / 60, 1),
-        "heater_cycles": heater["cycles"],
-    }
+    return PowerService.summary(db)
 
 
 def system_health(db: Session) -> dict[str, Any]:
@@ -320,8 +306,9 @@ def history_rows(db: Session, table: str, limit: int = 100) -> list[dict[str, An
             for row in rows
         ]
     if table == "power":
-        rows = db.scalars(select(PowerHistory).order_by(desc(PowerHistory.created_at)).limit(limit)).all()
-        return [{"id": row.id, "metric": row.metric, "value": row.value, "unit": row.unit, "payload": row.payload, "created_at": row.created_at} for row in rows]
+        from app.services.history_service import HistoryService
+
+        return HistoryService.power_history_rows(db, limit)
     if table == "alarm":
         rows = db.scalars(select(AlarmHistory).order_by(desc(AlarmHistory.started_at)).limit(limit)).all()
         return [
@@ -340,4 +327,3 @@ def history_rows(db: Session, table: str, limit: int = 100) -> list[dict[str, An
         ]
     rows = db.scalars(select(HealthHistory).order_by(desc(HealthHistory.created_at)).limit(limit)).all()
     return [{"id": row.id, "module": row.module, "state": row.state, "detail": row.detail, "created_at": row.created_at} for row in rows]
-
