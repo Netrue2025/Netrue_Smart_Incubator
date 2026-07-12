@@ -2,26 +2,35 @@
 
 ## Backend
 
-Run with Uvicorn behind a reverse proxy or as a Windows service.
+Run with Uvicorn behind a reverse proxy or as a Windows service. Configure MySQL
+first; the backend does not create local data folders or local database files.
 
 ```powershell
 cd backend
 .\.venv\Scripts\uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Keep `backend/data` on persistent storage and back it up regularly.
+Run migrations against Hostinger MySQL from the repository root before first use:
+
+```powershell
+alembic upgrade head
+```
 
 ## Vercel Full-Stack Deployment
 
 The repository includes `api/index.py` so Vercel can route `/api/...` requests to
 the FastAPI app, while `frontend/dist` serves the dashboard.
 
-For production telemetry on Vercel, configure a persistent database. Do not rely
-on the default SQLite file for live ESP32 history on serverless hosting. Set this
-environment variable in Vercel:
+For production telemetry on Vercel, configure Hostinger MySQL. Set either
+`DATABASE_URL` or the individual `DB_*` variables in Vercel:
 
 ```text
-INCUBATOR_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
+DATABASE_URL=mysql+pymysql://USER:PASSWORD@HOST:3306/DATABASE?charset=utf8mb4
+DB_HOST=HOST
+DB_PORT=3306
+DB_NAME=DATABASE
+DB_USER=USER
+DB_PASSWORD=PASSWORD
 ```
 
 After deployment:
@@ -32,9 +41,8 @@ Backend API -> https://netrue-smart-incubator.vercel.app/api
 ESP32 BACKEND_URL -> https://netrue-smart-incubator.vercel.app
 ```
 
-The dashboard polls `/api/status` every 5 seconds, so live data still refreshes
-on Vercel even if serverless WebSockets are not available. If you self-host the
-backend with Uvicorn, `/ws/live` remains available.
+The dashboard polls `/api/live/status` every 5 seconds, so live data refreshes
+without WebSockets or long-running server processes.
 
 ## Frontend
 
@@ -43,7 +51,7 @@ cd frontend
 npm run build
 ```
 
-Serve `frontend/dist` with Nginx, Caddy, or any static file server. Proxy `/api` and `/ws` to the backend.
+Serve `frontend/dist` with Nginx, Caddy, or any static file server. Proxy `/api` to the backend.
 
 ### Vercel dashboard with a local backend
 
@@ -68,13 +76,13 @@ for example:
 https://your-backend-domain.com
 ```
 
-The dashboard automatically appends `/api` when needed and connects WebSockets
-to `/ws/live` on the same backend. The backend CORS defaults include the Vercel
-domain and Vercel preview domains.
+The dashboard automatically appends `/api` when needed and polls
+`/api/live/status`. The backend CORS defaults include the Vercel domain and
+Vercel preview domains.
 
 If the backend is still running on your local machine, the ESP32 can continue to
 use the LAN address in `BACKEND_URL`, while the deployed dashboard uses the
-public HTTPS tunnel URL. Both URLs point to the same FastAPI process and SQLite
+public HTTPS tunnel URL. Both URLs point to the same FastAPI process and MySQL
 data.
 
 ## Firmware

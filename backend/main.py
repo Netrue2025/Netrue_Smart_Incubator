@@ -1,20 +1,24 @@
-from pathlib import Path
 import importlib.machinery
+import os
 import sys
 
 
-LOCAL_LIBS = Path(__file__).resolve().parent / ".pythonlibs"
-if LOCAL_LIBS.exists():
-    sys.path.insert(0, str(LOCAL_LIBS))
+LOCAL_LIBS = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pythonlibs")
+if os.path.isdir(LOCAL_LIBS):
+    sys.path.insert(0, LOCAL_LIBS)
 
-    pydantic_core_dir = LOCAL_LIBS / "pydantic_core"
-    compiled_core_files = list(pydantic_core_dir.glob("_pydantic_core*.pyd"))
+    pydantic_core_dir = os.path.join(LOCAL_LIBS, "pydantic_core")
+    compiled_core_files = [
+        os.path.join(pydantic_core_dir, name)
+        for name in os.listdir(pydantic_core_dir)
+        if name.startswith("_pydantic_core") and name.endswith(".pyd")
+    ] if os.path.isdir(pydantic_core_dir) else []
     expected_core_files = [
-        pydantic_core_dir / f"_pydantic_core{suffix}"
+        os.path.join(pydantic_core_dir, f"_pydantic_core{suffix}")
         for suffix in importlib.machinery.EXTENSION_SUFFIXES
     ]
-    if compiled_core_files and not any(path.exists() for path in expected_core_files):
-        installed_tags = ", ".join(path.name for path in compiled_core_files)
+    if compiled_core_files and not any(os.path.exists(path) for path in expected_core_files):
+        installed_tags = ", ".join(os.path.basename(path) for path in compiled_core_files)
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
         raise SystemExit(
             "The backend dependencies in .pythonlibs were installed for a different "

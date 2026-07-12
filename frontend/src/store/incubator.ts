@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getLiveWebSocketUrl, incubatorApi } from "../api/client";
+import { incubatorApi } from "../api/client";
 import type { Alert, HistoryPayload, StatusSnapshot } from "../types/incubator";
 
 interface IncubatorState {
@@ -56,16 +56,26 @@ export const useIncubatorStore = create<IncubatorState>((set, get) => ({
   },
   setStatus: (status) => set({ status }),
   connectLive: () => {
-    const socket = new WebSocket(getLiveWebSocketUrl());
-    socket.onopen = () => set({ connected: true });
-    socket.onclose = () => set({ connected: false });
-    socket.onmessage = (event) => {
-      const status = JSON.parse(event.data) as StatusSnapshot;
-      set((state) => ({
-        status,
-        history: status.environment ? appendLatestReading(state, status) : { ...state.history, readings: [] }
-      }));
+    let active = true;
+    const refresh = async () => {
+      try {
+        const status = await incubatorApi.liveStatus();
+        if (!active) return;
+        set((state) => ({
+          connected: true,
+          status,
+          history: status.environment ? appendLatestReading(state, status) : { ...state.history, readings: [] }
+        }));
+      } catch (error) {
+        if (active) set({ connected: false });
+      }
     };
-    return () => socket.close();
+    refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      set({ connected: false });
+    };
   }
 }));

@@ -5,7 +5,7 @@ Offline-first ESP32 incubator architecture with a FastAPI backend, React dashboa
 ## Structure
 
 ```text
-backend/   FastAPI, SQLite, REST, WebSocket, local queues
+backend/   FastAPI, MySQL, REST polling, database-backed queues
 frontend/  React, Vite, TypeScript, TailwindCSS, Recharts
 firmware/  ESP32 DevKit, Arduino framework, DHT22, SSD1306 OLED, heater relay, fan relay, tray servo, buzzer, status LED, page button
 docs/      Installation, API, deployment, protocol, sync, troubleshooting
@@ -18,7 +18,7 @@ docs/      Installation, API, deployment, protocol, sync, troubleshooting
 3. Copy `firmware/include/secrets.example.h` to `firmware/include/secrets.h`, set WiFi and backend URL, then flash with PlatformIO.
 
 The ESP32 continues temperature control without WiFi and uploads queued readings when connectivity returns.
-For Vercel, `/api` routes into the FastAPI app through `api/index.py`; set `INCUBATOR_DATABASE_URL` to persistent storage before relying on deployed telemetry. Local development still uses the Vite `/api` proxy.
+For Vercel, `/api` routes into the FastAPI app through `api/index.py`; set `DATABASE_URL` or the Hostinger MySQL `DB_*` environment variables before relying on deployed telemetry. Local development still uses the Vite `/api` proxy.
 
 GPIO23 drives the fan relay. The firmware keeps the fan ON while humidity is above the target humidity; when humidity is equal to or below target, the fan follows the heater relay.
 

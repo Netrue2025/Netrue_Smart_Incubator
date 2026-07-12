@@ -88,7 +88,10 @@ Modes: `AUTO`, `MANUAL`, `EMERGENCY_OFF`.
 - `GET /system`
 - `GET /alerts`
 - `POST /alerts/{id}/ack`
-- `WS /ws/live`
+- `GET /live/status`
+- `GET /reports/power.pdf`
+- `GET /reports/power.csv`
+- `GET /reports/power.xlsx`
 
 ## Analytics Upgrade
 

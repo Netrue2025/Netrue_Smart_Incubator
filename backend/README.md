@@ -1,6 +1,6 @@
 # Smart AI Incubator V2 Backend
 
-FastAPI service for telemetry storage, validated control settings, relay commands, alerts, local queues, and live WebSocket streaming.
+FastAPI service for telemetry storage, validated control settings, relay commands, alerts, database-backed queues, and live HTTP polling.
 
 ## Run
 
@@ -10,7 +10,16 @@ python -m venv .venv
 .\.venv\Scripts\uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The SQLite database is created at `data/incubator.db`.
+Configure MySQL before running. From the repository root, run:
+
+```powershell
+$env:DB_HOST="your-hostinger-mysql-host"
+$env:DB_PORT="3306"
+$env:DB_NAME="your_database"
+$env:DB_USER="your_user"
+$env:DB_PASSWORD="your_password"
+alembic upgrade head
+```
 
 If Windows `venv` fails because `ensurepip` is broken, install Python 3.13+ with pip enabled or install dependencies into a local target folder:
 
@@ -36,4 +45,7 @@ Use `py -3.13 main.py` on this Windows machine if the default `python` command p
 - `GET /api/system`
 - `GET /api/alerts`
 - `POST /api/alerts/{id}/ack`
-- `WS /ws/live`
+- `GET /api/live/status`
+- `GET /api/reports/power.pdf`
+- `GET /api/reports/power.csv`
+- `GET /api/reports/power.xlsx`

@@ -26,11 +26,19 @@ configures Vercel to install dependencies in that folder, run the Vite build,
 publish `frontend/dist`, and route `/api/...` to the FastAPI app through
 `api/index.py`.
 
-For a full Vercel deployment, set a persistent database URL:
+For a full Vercel deployment, set Hostinger MySQL environment variables:
 
 ```text
-INCUBATOR_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
+DATABASE_URL=mysql+pymysql://USER:PASSWORD@HOST:3306/DATABASE?charset=utf8mb4
+DB_HOST=HOST
+DB_PORT=3306
+DB_NAME=DATABASE
+DB_USER=USER
+DB_PASSWORD=PASSWORD
 ```
+
+Run `alembic upgrade head` from the repository root against the same database
+before the ESP32 starts posting production telemetry.
 
 Then set the ESP32 firmware backend URL to the deployed Vercel origin:
 

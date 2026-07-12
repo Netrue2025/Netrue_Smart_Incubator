@@ -57,20 +57,6 @@ export function setApiBaseUrl(value: string) {
   api.defaults.baseURL = getApiBaseUrl();
 }
 
-export function getLiveWebSocketUrl() {
-  const apiBaseUrl = getApiBaseUrl();
-  if (apiBaseUrl.startsWith("http://") || apiBaseUrl.startsWith("https://")) {
-    const url = new URL(apiBaseUrl);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.pathname = `${url.pathname.replace(/\/api$/, "").replace(/\/+$/, "")}/ws/live`;
-    url.search = "";
-    url.hash = "";
-    return url.toString();
-  }
-
-  return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/live`;
-}
-
 export const api = axios.create({
   baseURL: getApiBaseUrl(),
   timeout: 8000
@@ -78,6 +64,7 @@ export const api = axios.create({
 
 export const incubatorApi = {
   status: () => api.get<StatusSnapshot>("/status").then((r) => r.data),
+  liveStatus: () => api.get<StatusSnapshot>("/live/status").then((r) => r.data),
   settings: () => api.get<Settings>("/settings").then((r) => r.data),
   saveSettings: (payload: Partial<Settings> & { timestamp?: string }) => api.post<Settings>("/settings", payload).then((r) => r.data),
   wifiNetworks: () => api.get<WifiNetwork[]>("/wifi/networks").then((r) => r.data),

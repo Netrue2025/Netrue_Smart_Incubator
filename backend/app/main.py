@@ -1,30 +1,14 @@
-import asyncio
-from contextlib import asynccontextmanager, suppress
-
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import router
 from app.config.settings import get_settings
-from app.database.session import init_db
-from app.sync.scheduler import live_scheduler
-from app.websocket.manager import manager
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    stop_event = asyncio.Event()
-    task = asyncio.create_task(live_scheduler(stop_event))
-    yield
-    stop_event.set()
-    task.cancel()
-    with suppress(asyncio.CancelledError):
-        await task
 
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, version=settings.firmware_version, lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version=settings.firmware_version)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -36,11 +20,11 @@ app.add_middleware(
 app.include_router(router, prefix=settings.api_prefix)
 
 
-@app.websocket("/ws/live")
-async def websocket_live(websocket: WebSocket) -> None:
-    await manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"ok": False, "message": "Validation failed", "errors": exc.errors()})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(status_code=500, content={"ok": False, "message": "Internal server error"})

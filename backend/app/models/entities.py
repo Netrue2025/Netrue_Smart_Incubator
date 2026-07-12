@@ -10,6 +10,11 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class TimestampMixin:
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
+
+
 class SensorReading(Base):
     __tablename__ = "sensor_readings"
 
@@ -23,6 +28,7 @@ class SensorReading(Base):
     sync_status: Mapped[str] = mapped_column(String(30), default="synced")
     device_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
     @property
     def timestamp(self) -> datetime:
@@ -37,6 +43,7 @@ class RelayEvent(Base):
     mode: Mapped[str] = mapped_column(String(20), default="AUTO")
     reason: Mapped[str] = mapped_column(String(160), default="telemetry")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
 
 class DeviceSettings(Base):
@@ -86,6 +93,8 @@ class WifiNetwork(Base):
     encryption: Mapped[str] = mapped_column(String(40), default="unknown")
     channel: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
 
 class Alert(Base):
@@ -97,6 +106,7 @@ class Alert(Base):
     message: Mapped[str] = mapped_column(String(240))
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
 
 class SyncQueueItem(Base):
@@ -108,6 +118,7 @@ class SyncQueueItem(Base):
     payload: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -118,6 +129,7 @@ class EventLog(Base):
     type: Mapped[str] = mapped_column(String(80), index=True)
     message: Mapped[str] = mapped_column(String(240))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
 
 class IncubationProfile(Base):
@@ -152,6 +164,7 @@ class ServoHistory(Base):
     duration_seconds: Mapped[float] = mapped_column(Float, default=0.0)
     message: Mapped[str] = mapped_column(String(240), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
 
 class HeaterHistory(Base):
@@ -163,6 +176,7 @@ class HeaterHistory(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_seconds: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
 
 class PowerConfig(Base):
@@ -188,6 +202,7 @@ class PowerConfig(Base):
     battery_usable_percent: Mapped[float] = mapped_column(Float, default=60.0)
     inverter_efficiency_percent: Mapped[float] = mapped_column(Float, default=88.0)
     battery_chemistry: Mapped[str] = mapped_column(String(40), default="Lead Acid")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
 
 
@@ -200,6 +215,7 @@ class PowerHistory(Base):
     unit: Mapped[str] = mapped_column(String(20), default="")
     payload: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
 
 class AlarmHistory(Base):
@@ -214,6 +230,8 @@ class AlarmHistory(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
 
 
 class HealthHistory(Base):
@@ -224,3 +242,154 @@ class HealthHistory(Base):
     state: Mapped[str] = mapped_column(String(30), default="ok", index=True)
     detail: Mapped[str] = mapped_column(String(240), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, index=True)
+
+
+class User(TimestampMixin, Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), default="Operator")
+    email: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(40), default="operator")
+
+
+class Device(TimestampMixin, Base):
+    __tablename__ = "devices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), default="Smart Incubator V2")
+    device_uid: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    firmware_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SensorLog(TimestampMixin, Base):
+    __tablename__ = "sensor_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    device_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class PowerLog(TimestampMixin, Base):
+    __tablename__ = "power_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    device_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    watts: Mapped[float] = mapped_column(Float, default=0.0)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class HourlyPowerSummary(TimestampMixin, Base):
+    __tablename__ = "hourly_power_summary"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    hour_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    energy_wh: Mapped[float] = mapped_column(Float, default=0.0)
+    average_watts: Mapped[float] = mapped_column(Float, default=0.0)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class DailyPowerSummary(TimestampMixin, Base):
+    __tablename__ = "daily_power_summary"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    summary_date: Mapped[date] = mapped_column(Date, index=True)
+    energy_wh: Mapped[float] = mapped_column(Float, default=0.0)
+    average_watts: Mapped[float] = mapped_column(Float, default=0.0)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class IncubationBatch(TimestampMixin, Base):
+    __tablename__ = "incubation_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    batch_name: Mapped[str] = mapped_column(String(120), default="Main batch")
+    egg_count: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="active")
+
+
+class EggCategory(TimestampMixin, Base):
+    __tablename__ = "egg_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(80), index=True)
+    incubation_days: Mapped[int] = mapped_column(Integer, default=21)
+    lockdown_day: Mapped[int] = mapped_column(Integer, default=18)
+
+
+class TemperatureLog(TimestampMixin, Base):
+    __tablename__ = "temperature_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    value: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(12), default="C")
+
+
+class HumidityLog(TimestampMixin, Base):
+    __tablename__ = "humidity_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    value: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(12), default="%")
+
+
+class HeaterLog(TimestampMixin, Base):
+    __tablename__ = "heater_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    state: Mapped[str] = mapped_column(String(40), default="off")
+    duration_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class ServoLog(TimestampMixin, Base):
+    __tablename__ = "servo_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(40), default="cycle")
+    target_angle: Mapped[int] = mapped_column(Integer, default=0)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class SystemLog(TimestampMixin, Base):
+    __tablename__ = "system_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    level: Mapped[str] = mapped_column(String(20), default="info", index=True)
+    source: Mapped[str] = mapped_column(String(80), default="backend", index=True)
+    message: Mapped[str] = mapped_column(String(240))
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class Report(TimestampMixin, Base):
+    __tablename__ = "reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    report_type: Mapped[str] = mapped_column(String(80), index=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    device_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    download_count: Mapped[int] = mapped_column(Integer, default=0)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class AppSetting(TimestampMixin, Base):
+    __tablename__ = "settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    key: Mapped[str] = mapped_column(String(120), index=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+    category: Mapped[str] = mapped_column(String(80), default="general", index=True)
+
+
+class AnalyticsCache(TimestampMixin, Base):
+    __tablename__ = "analytics_cache"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    cache_key: Mapped[str] = mapped_column(String(160), index=True)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -4,20 +4,26 @@
 backend/
   app/
     api/
-    websocket/
     services/
+    repositories/
+    reports/
+    storage/
+    cache/
     models/
     database/
     schemas/
     utils/
     queue/
-    sync/
     config/
-    logs/
-  data/
-  uploads/
   requirements.txt
   main.py
+
+api/
+  index.py
+
+migrations/
+  env.py
+  versions/
 
 frontend/
   src/

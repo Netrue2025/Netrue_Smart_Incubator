@@ -5,7 +5,21 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
-from app.models.entities import Alert, DeviceSettings, EventLog, RelayEvent, SensorReading, WifiNetwork, now_utc
+from app.models.entities import (
+    AlarmHistory,
+    Alert,
+    DeviceSettings,
+    EventLog,
+    HeaterLog,
+    HumidityLog,
+    RelayEvent,
+    SensorLog,
+    SensorReading,
+    SystemLog,
+    TemperatureLog,
+    WifiNetwork,
+    now_utc,
+)
 from app.queue.offline_queue import enqueue, pending_count
 from app.schemas.api import CalibrationIn, EnvironmentIn, RelayCommand, SettingsIn, WifiConnectIn, WifiNetworksIn, WifiStatusIn
 from app.utils.time import ensure_aware_utc
@@ -28,12 +42,14 @@ def latest_reading(db: Session) -> SensorReading | None:
 
 def create_event(db: Session, type_: str, message: str) -> None:
     db.add(EventLog(type=type_, message=message))
+    db.add(SystemLog(level="info", source=type_, message=message))
     db.commit()
 
 
 def create_alert(db: Session, type_: str, severity: str, message: str) -> Alert:
     alert = Alert(type=type_, severity=severity, message=message)
     db.add(alert)
+    db.add(AlarmHistory(module=type_, severity=severity, message=message))
     db.commit()
     db.refresh(alert)
     return alert
@@ -79,9 +95,13 @@ def ingest_environment(db: Session, payload: EnvironmentIn) -> SensorReading:
         device_timestamp=ensure_aware_utc(payload.timestamp),
     )
     db.add(reading)
+    db.add(SensorLog(payload=payload.model_dump_json()))
+    db.add(TemperatureLog(value=payload.temperature))
+    db.add(HumidityLog(value=payload.humidity))
     latest = latest_reading(db)
     if latest is None or latest.relay != reading.relay:
         db.add(RelayEvent(relay=reading.relay, mode=get_or_create_settings(db).relay_mode, reason="firmware telemetry"))
+        db.add(HeaterLog(state="on" if reading.relay else "off", payload=payload.model_dump_json()))
     db.commit()
     db.refresh(reading)
     evaluate_alerts(db, reading, get_or_create_settings(db))
@@ -256,6 +276,7 @@ def apply_relay_command(db: Session, command: RelayCommand) -> DeviceSettings:
     settings.updated_at = ensure_aware_utc(command.timestamp)
     db.add(settings)
     db.add(RelayEvent(relay=settings.manual_relay, mode=settings.relay_mode, reason=command.reason))
+    db.add(HeaterLog(state="on" if settings.manual_relay else "off", payload=command.model_dump_json()))
     db.commit()
     db.refresh(settings)
     enqueue(db, "outgoing", "relay", settings_to_command(settings))
@@ -324,6 +345,43 @@ def status_snapshot(db: Session) -> dict[str, Any]:
         "settings": settings_to_payload(settings),
         "time": now,
     }
+
+
+def live_status_snapshot(db: Session) -> dict[str, Any]:
+    snapshot = status_snapshot(db)
+    reading = snapshot["environment"]
+    settings = snapshot["settings"]
+    power = {
+        "battery": None,
+        "current_power": None,
+        "current_runtime": None,
+        "duty_cycle": None,
+    }
+    try:
+        from app.services.analytics import heater_summary, power_summary
+
+        heater = heater_summary(db)
+        power_summary_payload = power_summary(db)
+        power = {
+            "battery": power_summary_payload.get("battery"),
+            "current_power": power_summary_payload.get("live_load_watts"),
+            "current_runtime": power_summary_payload.get("heater_runtime_minutes"),
+            "duty_cycle": heater.get("duty_cycle_percent"),
+        }
+    except Exception:
+        pass
+    snapshot["live"] = {
+        "temperature": reading["temperature"] if reading else None,
+        "humidity": reading["humidity"] if reading else None,
+        "heater": reading["relay"] if reading else False,
+        "servo": settings["tray_servo_enabled"],
+        "battery": power["battery"],
+        "current_power": power["current_power"],
+        "current_runtime": power["current_runtime"],
+        "duty_cycle": power["duty_cycle"],
+        "current_rtc": snapshot["time"],
+    }
+    return snapshot
 
 
 def system_snapshot(db: Session) -> dict[str, Any]:

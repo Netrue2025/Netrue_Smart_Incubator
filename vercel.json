@@ -10,11 +10,7 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/ws/(.*)",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/((?!api|ws).*)",
+      "source": "/((?!api).*)",
       "destination": "/index.html"
     }
   ]

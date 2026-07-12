@@ -9,6 +9,7 @@ from app.api.analytics import router as analytics_router
 from app.database.session import get_db
 from app.models.entities import Alert
 from app.queue.offline_queue import enqueue
+from app.reports import power_report_response
 from app.schemas.api import (
     AlertOut,
     ApiMessage,
@@ -30,6 +31,7 @@ from app.services.incubator import (
     get_or_create_settings,
     ingest_environment,
     latest_reading,
+    live_status_snapshot,
     reading_to_payload,
     request_wifi_scan,
     status_snapshot,
@@ -49,6 +51,11 @@ router.include_router(analytics_router)
 @router.get("/status")
 def get_status(db: Session = Depends(get_db)) -> dict:
     return status_snapshot(db)
+
+
+@router.get("/live/status")
+def get_live_status(db: Session = Depends(get_db)) -> dict:
+    return live_status_snapshot(db)
 
 
 @router.get("/environment")
@@ -127,6 +134,13 @@ async def ota_update(file: UploadFile | None = None, db: Session = Depends(get_d
     payload = {"command": "ota", "filename": file.filename if file else None, "timestamp": datetime.utcnow().isoformat()}
     enqueue(db, "outgoing", "ota", payload)
     return ApiMessage(message="OTA update command queued")
+
+
+@router.get("/reports/power.{export_format}")
+def export_power_report(export_format: str, db: Session = Depends(get_db)):
+    if export_format not in {"pdf", "csv", "xlsx"}:
+        return JSONResponse(status_code=400, content={"ok": False, "message": "Unsupported report format"})
+    return power_report_response(db, export_format)
 
 
 @router.get("/system")

@@ -261,7 +261,7 @@ def system_health(db: Session) -> dict[str, Any]:
     unacked_alerts = db.scalar(select(func.count(Alert.id)).where(Alert.acknowledged.is_(False))) or 0
     modules = [
         {"module": "backend", "state": "ok", "detail": "FastAPI is responding"},
-        {"module": "database", "state": "ok", "detail": "SQLite session is available"},
+        {"module": "database", "state": "ok", "detail": "MySQL session is available"},
         {"module": "esp32", "state": "ok" if sensor_fresh else "warning", "detail": "Fresh telemetry received" if sensor_fresh else "Waiting for fresh ESP32 telemetry"},
         {"module": "sensor", "state": "ok" if reading else "warning", "detail": "DHT reading available" if reading else "No DHT reading stored yet"},
         {"module": "wifi", "state": "ok" if reading and reading.wifi else "warning", "detail": "ESP32 WiFi connected" if reading and reading.wifi else "ESP32 WiFi not confirmed"},

@@ -9,7 +9,7 @@ export function About() {
       <CardContent className="space-y-4 text-sm leading-6 text-foreground/75">
         <p>
           This dashboard manages an offline-first ESP32 incubator with local relay safety, DHT22 telemetry,
-          SQLite history, queued commands, and live WebSocket monitoring.
+          MySQL history, queued commands, and live HTTP polling.
         </p>
         <p>
           The firmware keeps reading sensors and controlling heat without WiFi. The backend stores telemetry,
