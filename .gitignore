@@ -1,3 +1,8 @@
+.env
+frontend/.env
+frontend/.env.local
+backend/.env
+backend/.env.local
 backend/.venv/
 backend/.pythonlibs/
 backend/app/**/__pycache__/

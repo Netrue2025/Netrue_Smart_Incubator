@@ -175,8 +175,6 @@ export function PowerManagement() {
 
   useEffect(() => {
     load().catch(console.error);
-    const timer = window.setInterval(() => load().catch(console.error), 60000);
-    return () => window.clearInterval(timer);
   }, []);
 
   const save = async (event: FormEvent) => {

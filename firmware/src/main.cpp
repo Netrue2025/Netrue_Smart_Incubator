@@ -7,6 +7,7 @@
 #include <HTTPClient.h>
 #include <U8g2lib.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <esp_idf_version.h>
 #include <esp_task_wdt.h>
 #include <time.h>
@@ -367,11 +368,25 @@ void connectWifi() {
   }
 }
 
+bool beginHttpRequest(HTTPClient& http, WiFiClient& wifiClient, WiFiClientSecure& secureClient, const String& url) {
+  if (url.startsWith("https://")) {
+    secureClient.setInsecure();
+    secureClient.setTimeout(HTTP_TIMEOUT_MS / 1000);
+    return http.begin(secureClient, url);
+  }
+  return http.begin(wifiClient, url);
+}
+
 int postJson(const String& endpoint, const String& payload) {
   if (WiFi.status() != WL_CONNECTED) return -1;
   HTTPClient http;
-  http.begin(String(BACKEND_URL) + endpoint);
-  http.setTimeout(1500);
+  WiFiClient wifiClient;
+  WiFiClientSecure secureClient;
+  const String url = String(BACKEND_URL) + endpoint;
+  if (!beginHttpRequest(http, wifiClient, secureClient, url)) {
+    return -1;
+  }
+  http.setTimeout(HTTP_TIMEOUT_MS);
   http.addHeader("Content-Type", "application/json");
   int code = http.POST(payload);
   Serial.printf("POST %s -> HTTP %d\n", endpoint.c_str(), code);
@@ -479,8 +494,13 @@ void applyRemoteConfig(JsonDocument& doc) {
 void fetchCommands() {
   if (WiFi.status() != WL_CONNECTED) return;
   HTTPClient http;
-  http.begin(String(BACKEND_URL) + "/api/settings?firmware=true");
-  http.setTimeout(1500);
+  WiFiClient wifiClient;
+  WiFiClientSecure secureClient;
+  const String url = String(BACKEND_URL) + "/api/settings?firmware=true";
+  if (!beginHttpRequest(http, wifiClient, secureClient, url)) {
+    return;
+  }
+  http.setTimeout(HTTP_TIMEOUT_MS);
   int code = http.GET();
   Serial.printf("GET /api/settings -> HTTP %d\n", code);
   if (code == 200) {

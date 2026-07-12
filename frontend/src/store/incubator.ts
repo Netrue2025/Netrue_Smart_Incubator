@@ -71,10 +71,8 @@ export const useIncubatorStore = create<IncubatorState>((set, get) => ({
       }
     };
     refresh();
-    const timer = window.setInterval(refresh, 5000);
     return () => {
       active = false;
-      window.clearInterval(timer);
       set({ connected: false });
     };
   }

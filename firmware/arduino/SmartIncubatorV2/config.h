@@ -60,6 +60,7 @@ constexpr float CRITICAL_TEMP_RESET_C = 38.5f;
 constexpr float CRITICAL_LOW_TEMP_C = 33.0f;
 constexpr float CRITICAL_LOW_TEMP_RESET_C = 34.0f;
 constexpr uint32_t SYNC_INTERVAL_MS = 5000;
+constexpr uint32_t HTTP_TIMEOUT_MS = 8000;
 constexpr uint32_t HISTORY_INTERVAL_MS = 30000;
 constexpr uint32_t WIFI_RETRY_INTERVAL_MS = 10000;
 constexpr uint8_t MAX_SENSOR_FAILURES = 3;

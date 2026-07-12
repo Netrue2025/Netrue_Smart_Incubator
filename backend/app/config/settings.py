@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     sensor_timeout_seconds: int = 8
     relay_timeout_seconds: int = 900
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "backend/.env", "../.env"), env_prefix="", extra="ignore")
 
     @model_validator(mode="after")
     def build_database_url(self) -> "Settings":
