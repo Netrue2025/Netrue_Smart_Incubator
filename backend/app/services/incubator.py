@@ -24,6 +24,11 @@ from app.queue.offline_queue import enqueue, pending_count
 from app.schemas.api import CalibrationIn, EnvironmentIn, RelayCommand, SettingsIn, WifiConnectIn, WifiNetworksIn, WifiStatusIn
 from app.utils.time import ensure_aware_utc
 
+TEMP_ALERT_LOW_C = 37.0
+TEMP_ALERT_HIGH_C = 38.4
+HUMIDITY_ALERT_HIGH_PERCENT = 55.0
+HUMIDITY_ALERT_THROTTLE = timedelta(hours=1)
+
 
 def get_or_create_settings(db: Session) -> DeviceSettings:
     settings = db.get(DeviceSettings, 1)
@@ -56,15 +61,10 @@ def create_alert(db: Session, type_: str, severity: str, message: str) -> Alert:
 
 
 def evaluate_alerts(db: Session, reading: SensorReading, settings: DeviceSettings) -> None:
-    high_temp = settings.target_temperature + settings.tolerance
-    low_temp = settings.target_temperature - settings.tolerance
-    high_humidity = settings.target_humidity + 10
-    low_humidity = settings.target_humidity - 10
+    now = datetime.now(timezone.utc)
     checks = [
-        (reading.temperature > high_temp, "high_temperature", "critical", f"Temperature {reading.temperature:.1f} C is above safe limit {high_temp:.1f} C"),
-        (reading.temperature < low_temp, "low_temperature", "warning", f"Temperature {reading.temperature:.1f} C is below lower limit {low_temp:.1f} C"),
-        (reading.humidity > high_humidity, "high_humidity", "warning", f"Humidity {reading.humidity:.1f}% is above target band"),
-        (reading.humidity < low_humidity, "low_humidity", "warning", f"Humidity {reading.humidity:.1f}% is below target band"),
+        (reading.temperature > TEMP_ALERT_HIGH_C, "high_temperature", "critical", f"Temperature {reading.temperature:.1f} C is above safe limit {TEMP_ALERT_HIGH_C:.1f} C"),
+        (reading.temperature < TEMP_ALERT_LOW_C, "low_temperature", "warning", f"Temperature {reading.temperature:.1f} C is below safe limit {TEMP_ALERT_LOW_C:.1f} C"),
         (not reading.wifi, "wifi_disconnected", "warning", "ESP32 reported WiFi disconnected"),
         (reading.sync_status != "synced", "sync_failed", "warning", f"Sync status is {reading.sync_status}"),
     ]
@@ -78,6 +78,20 @@ def evaluate_alerts(db: Session, reading: SensorReading, settings: DeviceSetting
             ).first()
             if not recent:
                 create_alert(db, type_, severity, message)
+    if reading.humidity > HUMIDITY_ALERT_HIGH_PERCENT:
+        recent_humidity_alert = db.scalars(
+            select(Alert)
+            .where(Alert.type == "high_humidity", Alert.created_at >= now - HUMIDITY_ALERT_THROTTLE)
+            .order_by(desc(Alert.created_at))
+            .limit(1)
+        ).first()
+        if not recent_humidity_alert:
+            create_alert(
+                db,
+                "high_humidity",
+                "warning",
+                f"Humidity {reading.humidity:.1f}% is above chicken first-18-days safe limit {HUMIDITY_ALERT_HIGH_PERCENT:.0f}%",
+            )
 
 
 def ingest_environment(db: Session, payload: EnvironmentIn) -> SensorReading:
