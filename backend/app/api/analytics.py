@@ -58,7 +58,7 @@ def get_heater(db: Session = Depends(get_db)) -> dict:
 
 @router.get("/power")
 def get_power(db: Session = Depends(get_db)) -> dict:
-    return power_summary(db)
+    return power_summary(db, log=False)
 
 
 @router.post("/power")
@@ -114,4 +114,3 @@ def get_alarm_history(limit: int = Query(default=100, ge=1, le=500), db: Session
 @router.get("/history/system-health")
 def get_health_history(limit: int = Query(default=100, ge=1, le=500), db: Session = Depends(get_db)) -> dict:
     return {"items": history_rows(db, "health", limit)}
-

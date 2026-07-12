@@ -361,7 +361,7 @@ def live_status_snapshot(db: Session) -> dict[str, Any]:
         from app.services.analytics import heater_summary, power_summary
 
         heater = heater_summary(db)
-        power_summary_payload = power_summary(db)
+        power_summary_payload = power_summary(db, log=False)
         power = {
             "battery": power_summary_payload.get("battery"),
             "current_power": power_summary_payload.get("live_load_watts"),

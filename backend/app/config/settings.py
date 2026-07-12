@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     cors_origin_regex: str | None = r"https://.*\.vercel\.app"
     firmware_version: str = "2.0.0"
     sync_interval_seconds: int = 10
-    sensor_timeout_seconds: int = 8
+    sensor_timeout_seconds: int = 60
     relay_timeout_seconds: int = 900
 
     model_config = SettingsConfigDict(env_file=(".env", "backend/.env", "../.env"), env_prefix="", extra="ignore")

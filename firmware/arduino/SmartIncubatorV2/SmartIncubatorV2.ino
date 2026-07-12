@@ -44,6 +44,7 @@ bool heaterWarmupFault = false;
 bool criticalHeatFault = false;
 bool criticalLowTempFault = false;
 bool heaterRelayWasOn = false;
+bool fanHumidityVentilation = false;
 float heaterRelayStartTemp = NAN;
 float previousTemperature = NAN;
 uint32_t heaterRelayStartedAt = 0;
@@ -295,14 +296,25 @@ void applyRelayControl() {
 
 void applyFanControl() {
   if (criticalHeatFault) {
+    fanHumidityVentilation = true;
     setFanRelay(true);
     return;
   }
   if (config.emergencyOff || config.relayMode == "EMERGENCY_OFF" || sensorFailures >= MAX_SENSOR_FAILURES || isnan(latestReading.humidity)) {
+    fanHumidityVentilation = false;
     setFanRelay(false);
     return;
   }
-  if (latestReading.humidity > config.targetHumidity) {
+
+  const float fanOnHumidity = config.targetHumidity + FAN_HUMIDITY_HYSTERESIS_PERCENT;
+  const float fanOffHumidity = config.targetHumidity - FAN_HUMIDITY_HYSTERESIS_PERCENT;
+  if (!fanHumidityVentilation && latestReading.humidity >= fanOnHumidity) {
+    fanHumidityVentilation = true;
+  } else if (fanHumidityVentilation && latestReading.humidity <= fanOffHumidity) {
+    fanHumidityVentilation = false;
+  }
+
+  if (fanHumidityVentilation) {
     setFanRelay(true);
     return;
   }

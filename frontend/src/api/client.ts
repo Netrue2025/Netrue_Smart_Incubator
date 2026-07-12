@@ -59,7 +59,7 @@ export function setApiBaseUrl(value: string) {
 
 export const api = axios.create({
   baseURL: getApiBaseUrl(),
-  timeout: 8000
+  timeout: 30000
 });
 
 export const incubatorApi = {

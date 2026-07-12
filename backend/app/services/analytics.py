@@ -248,8 +248,8 @@ def record_servo_event(db: Session, payload: ServoEventIn) -> dict[str, Any]:
     }
 
 
-def power_summary(db: Session) -> dict[str, Any]:
-    return PowerService.summary(db)
+def power_summary(db: Session, log: bool = True) -> dict[str, Any]:
+    return PowerService.summary(db, log=log)
 
 
 def system_health(db: Session) -> dict[str, Any]:

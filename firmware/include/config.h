@@ -52,6 +52,7 @@ constexpr float HEATER_MIN_RISE_C = 0.1f;
 constexpr float HEATER_TEMP_DROP_C = 0.2f;
 constexpr float HEATER_LOW_ALARM_TEMP_C = 36.9f;
 constexpr float HEATER_FALLING_DELTA_C = 0.05f;
+constexpr float FAN_HUMIDITY_HYSTERESIS_PERCENT = 1.0f;
 constexpr float CRITICAL_TEMP_C = 39.0f;
 constexpr float CRITICAL_TEMP_RISE_C = 0.1f;
 constexpr float CRITICAL_TEMP_RESET_C = 38.5f;
