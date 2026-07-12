@@ -26,8 +26,10 @@ from app.utils.time import ensure_aware_utc
 
 TEMP_ALERT_LOW_C = 37.0
 TEMP_ALERT_HIGH_C = 38.4
+HUMIDITY_ALERT_LOW_PERCENT = 40.0
 HUMIDITY_ALERT_HIGH_PERCENT = 55.0
 HUMIDITY_ALERT_THROTTLE = timedelta(hours=1)
+POWER_OUTAGE_ALERT_THROTTLE = timedelta(hours=1)
 
 
 def get_or_create_settings(db: Session) -> DeviceSettings:
@@ -57,11 +59,37 @@ def create_alert(db: Session, type_: str, severity: str, message: str) -> Alert:
     db.add(AlarmHistory(module=type_, severity=severity, message=message))
     db.commit()
     db.refresh(alert)
+    try:
+        from app.services.notifications import notify_alert
+
+        notify_alert(db, alert)
+    except Exception as exc:
+        db.add(SystemLog(level="warning", source="notifications", message=f"Alert notification failed: {exc.__class__.__name__}"))
+        db.commit()
     return alert
 
 
-def evaluate_alerts(db: Session, reading: SensorReading, settings: DeviceSettings) -> None:
+def create_throttled_alert(db: Session, type_: str, severity: str, message: str, throttle: timedelta) -> Alert | None:
     now = datetime.now(timezone.utc)
+    recent = db.scalars(
+        select(Alert)
+        .where(Alert.type == type_, Alert.created_at >= now - throttle)
+        .order_by(desc(Alert.created_at))
+        .limit(1)
+    ).first()
+    if recent:
+        return None
+    return create_alert(db, type_, severity, message)
+
+
+def evaluate_alerts(
+    db: Session,
+    reading: SensorReading,
+    settings: DeviceSettings,
+    fault_code: str | None = None,
+    fault_title: str | None = None,
+    fault_detail: str | None = None,
+) -> None:
     checks = [
         (reading.temperature > TEMP_ALERT_HIGH_C, "high_temperature", "critical", f"Temperature {reading.temperature:.1f} C is above safe limit {TEMP_ALERT_HIGH_C:.1f} C"),
         (reading.temperature < TEMP_ALERT_LOW_C, "low_temperature", "warning", f"Temperature {reading.temperature:.1f} C is below safe limit {TEMP_ALERT_LOW_C:.1f} C"),
@@ -79,19 +107,41 @@ def evaluate_alerts(db: Session, reading: SensorReading, settings: DeviceSetting
             if not recent:
                 create_alert(db, type_, severity, message)
     if reading.humidity > HUMIDITY_ALERT_HIGH_PERCENT:
-        recent_humidity_alert = db.scalars(
-            select(Alert)
-            .where(Alert.type == "high_humidity", Alert.created_at >= now - HUMIDITY_ALERT_THROTTLE)
-            .order_by(desc(Alert.created_at))
-            .limit(1)
-        ).first()
-        if not recent_humidity_alert:
-            create_alert(
-                db,
-                "high_humidity",
-                "warning",
-                f"Humidity {reading.humidity:.1f}% is above chicken first-18-days safe limit {HUMIDITY_ALERT_HIGH_PERCENT:.0f}%",
-            )
+        create_throttled_alert(
+            db,
+            "high_humidity",
+            "warning",
+            f"Humidity {reading.humidity:.1f}% is above chicken first-18-days safe limit {HUMIDITY_ALERT_HIGH_PERCENT:.0f}%",
+            HUMIDITY_ALERT_THROTTLE,
+        )
+    if reading.humidity < HUMIDITY_ALERT_LOW_PERCENT:
+        create_throttled_alert(
+            db,
+            "low_humidity",
+            "warning",
+            f"Humidity {reading.humidity:.1f}% is below safe limit {HUMIDITY_ALERT_LOW_PERCENT:.0f}%",
+            HUMIDITY_ALERT_THROTTLE,
+        )
+    if fault_code and fault_code != "FAULT_NONE":
+        create_throttled_alert(
+            db,
+            f"firmware_{fault_code.lower()}",
+            "critical",
+            f"{fault_title or 'Firmware alarm'}: {fault_detail or 'ESP32 alarm is active'}",
+            timedelta(minutes=15),
+        )
+
+
+def evaluate_power_outage(db: Session, reading: SensorReading | None, online: bool) -> None:
+    if reading is None or online:
+        return
+    create_throttled_alert(
+        db,
+        "power_outage",
+        "critical",
+        "Power outage detected. Please check your power source.",
+        POWER_OUTAGE_ALERT_THROTTLE,
+    )
 
 
 def ingest_environment(db: Session, payload: EnvironmentIn) -> SensorReading:
@@ -118,7 +168,7 @@ def ingest_environment(db: Session, payload: EnvironmentIn) -> SensorReading:
         db.add(HeaterLog(state="on" if reading.relay else "off", payload=payload.model_dump_json()))
     db.commit()
     db.refresh(reading)
-    evaluate_alerts(db, reading, get_or_create_settings(db))
+    evaluate_alerts(db, reading, get_or_create_settings(db), payload.fault_code, payload.fault_title, payload.fault_detail)
     return reading
 
 
@@ -340,6 +390,7 @@ def status_snapshot(db: Session) -> dict[str, Any]:
     settings = get_or_create_settings(db)
     now = datetime.now(timezone.utc)
     online = bool(reading and (now - ensure_aware_utc(reading.created_at)).total_seconds() <= get_settings().sensor_timeout_seconds)
+    evaluate_power_outage(db, reading, online)
     current_reading = reading if online else None
     database_count = db.scalar(select(func.count(SensorReading.id))) or 0
     return {

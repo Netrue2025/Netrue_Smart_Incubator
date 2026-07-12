@@ -95,5 +95,8 @@ struct Reading {
   bool fanRelay = false;
   bool wifi = false;
   String syncStatus = "queued";
+  String faultCode = "";
+  String faultTitle = "";
+  String faultDetail = "";
   String timestamp = "";
 };

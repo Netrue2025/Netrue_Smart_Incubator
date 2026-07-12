@@ -81,6 +81,18 @@ const char* faultTitle(FaultCode fault) {
   }
 }
 
+const char* faultCodeName(FaultCode fault) {
+  switch (fault) {
+    case FAULT_SENSOR: return "FAULT_SENSOR";
+    case FAULT_CRITICAL_HEAT: return "FAULT_CRITICAL_HEAT";
+    case FAULT_CRITICAL_COLD: return "FAULT_CRITICAL_COLD";
+    case FAULT_HEATER_WARMUP: return "FAULT_HEATER_WARMUP";
+    case FAULT_SERVO: return "FAULT_SERVO";
+    case FAULT_EMERGENCY_OFF: return "FAULT_EMERGENCY_OFF";
+    default: return "FAULT_NONE";
+  }
+}
+
 const char* faultDetail(FaultCode fault) {
   switch (fault) {
     case FAULT_SENSOR: return "DHT22 GPIO4";
@@ -542,6 +554,11 @@ String readingJson(const Reading& reading) {
   doc["fan_relay"] = reading.fanRelay;
   doc["wifi"] = WiFi.status() == WL_CONNECTED;
   doc["sync_status"] = reading.syncStatus;
+  if (reading.faultCode.length() > 0 && reading.faultCode != "FAULT_NONE") {
+    doc["fault_code"] = reading.faultCode;
+    doc["fault_title"] = reading.faultTitle;
+    doc["fault_detail"] = reading.faultDetail;
+  }
   if (reading.timestamp.length() > 0) {
     doc["timestamp"] = reading.timestamp;
   }
@@ -574,6 +591,10 @@ void sensorTask(void*) {
       applyRelayControl();
       applyFanControl();
       updateHeatingFaults(latestReading.temperature);
+      FaultCode activeFault = currentFaultCode(config, sensorFailures, trayServoFault, criticalHeatFault, criticalLowTempFault, heaterWarmupFault);
+      latestReading.faultCode = faultCodeName(activeFault);
+      latestReading.faultTitle = activeFault == FAULT_NONE ? "" : faultTitle(activeFault);
+      latestReading.faultDetail = activeFault == FAULT_NONE ? "" : faultDetail(activeFault);
       sampledReading = latestReading;
       pendingUpload = latestReading;
       pendingUploadReady = true;

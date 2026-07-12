@@ -55,6 +55,20 @@ export interface Alert {
   created_at: string;
 }
 
+export interface NotificationSettings {
+  telegram_enabled: boolean;
+  telegram_chat_id: string;
+  telegram_bot_token_set: boolean;
+  email_enabled: boolean;
+  email_to: string;
+  email_from: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_password_set: boolean;
+  smtp_use_tls: boolean;
+}
+
 export interface StatusSnapshot {
   device: {
     online: boolean;

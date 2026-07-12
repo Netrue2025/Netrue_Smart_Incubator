@@ -5,6 +5,7 @@ import type {
   HistoryPayload,
   IncubationPayload,
   IncubationProfile,
+  NotificationSettings,
   PowerSummary,
   RelayMode,
   ServoAnalytics,
@@ -74,6 +75,11 @@ export const incubatorApi = {
   history: (range = "today") => api.get<HistoryPayload>("/history", { params: { range } }).then((r) => r.data),
   alerts: () => api.get<Alert[]>("/alerts").then((r) => r.data),
   ackAlert: (id: number) => api.post(`/alerts/${id}/ack`).then((r) => r.data),
+  deleteAlert: (id: number) => api.delete(`/alerts/${id}`).then((r) => r.data),
+  deleteAlerts: (ids: number[]) => api.post("/alerts/delete", { ids }).then((r) => r.data),
+  notificationSettings: () => api.get<NotificationSettings>("/notifications").then((r) => r.data),
+  saveNotificationSettings: (payload: Partial<NotificationSettings> & { telegram_bot_token?: string; smtp_password?: string }) =>
+    api.post<NotificationSettings>("/notifications", payload).then((r) => r.data),
   calibration: (temperature_offset: number, humidity_offset: number) =>
     api.post<Settings>("/calibration", { temperature_offset, humidity_offset }).then((r) => r.data),
   restart: () => api.post("/restart").then((r) => r.data),

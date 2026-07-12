@@ -18,6 +18,9 @@ class EnvironmentIn(BaseModel):
     fan_relay: bool = False
     wifi: bool = True
     sync_status: str = "synced"
+    fault_code: str | None = Field(default=None, max_length=60)
+    fault_title: str | None = Field(default=None, max_length=80)
+    fault_detail: str | None = Field(default=None, max_length=160)
     timestamp: datetime = Field(default_factory=utc_now)
 
     @model_validator(mode="before")
@@ -130,6 +133,38 @@ class AlertOut(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AlertDeleteIn(BaseModel):
+    ids: list[int] = Field(default_factory=list)
+
+
+class NotificationSettingsIn(BaseModel):
+    telegram_enabled: bool = False
+    telegram_bot_token: str | None = Field(default=None, max_length=240)
+    telegram_chat_id: str | None = Field(default=None, max_length=120)
+    email_enabled: bool = False
+    email_to: str | None = Field(default=None, max_length=160)
+    email_from: str | None = Field(default=None, max_length=160)
+    smtp_host: str | None = Field(default=None, max_length=160)
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str | None = Field(default=None, max_length=160)
+    smtp_password: str | None = Field(default=None, max_length=240)
+    smtp_use_tls: bool = True
+
+
+class NotificationSettingsOut(BaseModel):
+    telegram_enabled: bool
+    telegram_chat_id: str
+    telegram_bot_token_set: bool
+    email_enabled: bool
+    email_to: str
+    email_from: str
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_password_set: bool
+    smtp_use_tls: bool
 
 
 class HistoryFilter(BaseModel):

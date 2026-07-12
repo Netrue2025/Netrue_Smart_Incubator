@@ -11,11 +11,14 @@ from app.models.entities import Alert
 from app.queue.offline_queue import enqueue
 from app.reports import power_report_response
 from app.schemas.api import (
+    AlertDeleteIn,
     AlertOut,
     ApiMessage,
     CalibrationIn,
     EnvironmentIn,
     EnvironmentOut,
+    NotificationSettingsIn,
+    NotificationSettingsOut,
     RelayCommand,
     SettingsIn,
     SettingsOut,
@@ -43,6 +46,7 @@ from app.services.incubator import (
     wifi_network_rows,
     settings_to_payload,
 )
+from app.services.notifications import get_notification_settings, save_notification_settings
 
 router = APIRouter()
 router.include_router(analytics_router)
@@ -162,3 +166,34 @@ def acknowledge_alert(alert_id: int, db: Session = Depends(get_db)) -> ApiMessag
     db.add(alert)
     db.commit()
     return ApiMessage(message="Alert acknowledged")
+
+
+@router.delete("/alerts/{alert_id}", response_model=ApiMessage)
+def delete_alert(alert_id: int, db: Session = Depends(get_db)) -> ApiMessage:
+    alert = db.get(Alert, alert_id)
+    if not alert:
+        return JSONResponse(status_code=404, content={"ok": False, "message": "Alert not found"})
+    db.delete(alert)
+    db.commit()
+    return ApiMessage(message="Alert deleted")
+
+
+@router.post("/alerts/delete", response_model=ApiMessage)
+def delete_alerts(payload: AlertDeleteIn, db: Session = Depends(get_db)) -> ApiMessage:
+    if not payload.ids:
+        return ApiMessage(message="No alerts selected")
+    rows = db.scalars(select(Alert).where(Alert.id.in_(payload.ids))).all()
+    for row in rows:
+        db.delete(row)
+    db.commit()
+    return ApiMessage(message=f"Deleted {len(rows)} alert(s)")
+
+
+@router.get("/notifications", response_model=NotificationSettingsOut)
+def notification_settings(db: Session = Depends(get_db)) -> dict:
+    return get_notification_settings(db)
+
+
+@router.post("/notifications", response_model=NotificationSettingsOut)
+def save_notifications(payload: NotificationSettingsIn, db: Session = Depends(get_db)) -> dict:
+    return save_notification_settings(db, payload)
