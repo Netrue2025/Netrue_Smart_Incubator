@@ -193,6 +193,10 @@ export interface PowerSummary {
     updated_at: string;
   };
   window_hours: number;
+  selected_date: string;
+  is_today: boolean;
+  day_start: string;
+  day_end: string;
   heater_kwh: number;
   base_kwh: number;
   servo_kwh: number;

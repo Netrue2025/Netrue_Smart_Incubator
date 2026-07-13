@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -57,8 +59,8 @@ def get_heater(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/power")
-def get_power(db: Session = Depends(get_db)) -> dict:
-    return power_summary(db, log=False)
+def get_power(day: date | None = None, db: Session = Depends(get_db)) -> dict:
+    return power_summary(db, log=False, day=day)
 
 
 @router.post("/power")

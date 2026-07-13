@@ -90,7 +90,7 @@ export const incubatorApi = {
   updateIncubation: (id: number, payload: Partial<IncubationProfile>) => api.patch<IncubationProfile>(`/incubation/${id}`, payload).then((r) => r.data),
   servo: () => api.get<ServoAnalytics>("/servo").then((r) => r.data),
   heater: () => api.get<HeaterAnalytics>("/heater").then((r) => r.data),
-  power: () => api.get<PowerSummary>("/power").then((r) => r.data),
+  power: (day?: string) => api.get<PowerSummary>("/power", { params: day ? { day } : undefined }).then((r) => r.data),
   savePower: (payload: PowerSummary["config"]) => api.post<PowerSummary>("/power", payload).then((r) => r.data),
   systemHealth: () => api.get<SystemHealth>("/system-health").then((r) => r.data),
   analyticsHistory: (kind: "servo" | "heater" | "power" | "alarm" | "system-health", limit = 100) =>

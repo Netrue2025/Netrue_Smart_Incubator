@@ -1,6 +1,6 @@
 import json
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import desc, select
@@ -29,20 +29,23 @@ class HistoryService:
         ]
 
     @staticmethod
-    def hourly_points(db: Session, config: PowerConfig, hours: int = 24) -> list[dict[str, Any]]:
-        now = ensure_aware_utc(datetime.now(timezone.utc))
-        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    def hourly_points(db: Session, config: PowerConfig, hours: int = 24, day: date | None = None, now: datetime | None = None) -> list[dict[str, Any]]:
+        now = ensure_aware_utc(now or datetime.now(timezone.utc))
+        selected_day = day or now.date()
+        day_start = datetime.combine(selected_day, time.min, tzinfo=timezone.utc)
+        day_end = day_start + timedelta(days=1)
+        effective_now = min(now, day_end)
         points: list[dict[str, Any]] = []
-        for hour in range(24):
+        for hour in range(min(max(hours, 1), 24)):
             begin = day_start + timedelta(hours=hour)
             stop = begin + timedelta(hours=1)
-            if begin > now:
+            if begin > effective_now:
                 energy = {"wh": 0.0, "average_watts": 0.0, "heater_duty_percent": 0.0}
                 duty = 0.0
             else:
-                effective_stop = min(stop, now)
+                effective_stop = min(stop, effective_now)
                 closed_hour_log = None
-                if stop <= now:
+                if stop <= effective_now:
                     closed_hour_log = db.scalars(
                         select(PowerHistory)
                         .where(PowerHistory.metric == "ems_hour", PowerHistory.created_at >= begin, PowerHistory.created_at < stop)

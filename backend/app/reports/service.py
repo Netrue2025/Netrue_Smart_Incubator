@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from io import BytesIO, StringIO
 from typing import Any
 
@@ -39,10 +39,14 @@ def record_report(db: Session, report_type: str, payload: dict[str, Any]) -> Rep
     return report
 
 
-def power_report_response(db: Session, export_format: str) -> StreamingResponse:
-    summary = PowerService.summary(db, log=False)
-    report = record_report(db, f"power_{export_format}", {"generated_at": datetime.now(timezone.utc).isoformat()})
-    filename = f"power-report-{report.id}.{export_format}"
+def power_report_response(db: Session, export_format: str, day: date | None = None) -> StreamingResponse:
+    summary = PowerService.summary(db, log=False, day=day)
+    report = record_report(
+        db,
+        f"power_{export_format}",
+        {"generated_at": datetime.now(timezone.utc).isoformat(), "selected_date": summary.get("selected_date")},
+    )
+    filename = f"power-report-{summary.get('selected_date')}-{report.id}.{export_format}"
     rows = [
         ("Metric", "Value"),
         ("Total kWh", summary.get("total_kwh")),

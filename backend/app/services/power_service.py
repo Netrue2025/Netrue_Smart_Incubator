@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import desc, select
@@ -72,7 +72,7 @@ class PowerService:
         return False
 
     @staticmethod
-    def summary(db: Session, log: bool = True) -> dict[str, Any]:
+    def summary(db: Session, log: bool = True, day: date | None = None) -> dict[str, Any]:
         from app.services.logger_service import LoggerService
 
         config = db.get(PowerConfig, 1)
@@ -84,18 +84,26 @@ class PowerService:
         config = PowerService.normalize_legacy_defaults(db, config)
 
         now = ensure_aware_utc(datetime.now(timezone.utc))
-        current_hour_begin = now.replace(minute=0, second=0, microsecond=0)
-        last_completed_hour_begin = current_hour_begin - timedelta(hours=1)
-        day_begin = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        selected_day = day or now.date()
+        day_begin = datetime.combine(selected_day, time.min, tzinfo=timezone.utc)
+        day_end = day_begin + timedelta(days=1)
+        is_today = selected_day == now.date()
+        is_future = day_begin > now
+        effective_finish = now if is_today else day_end
+        if is_future:
+            effective_finish = day_begin
+        current_hour_begin = now.replace(minute=0, second=0, microsecond=0) if is_today else day_begin
+        last_completed_hour_begin = current_hour_begin - timedelta(hours=1) if is_today else day_end - timedelta(hours=1)
+        last_completed_hour_end = current_hour_begin if is_today else day_end
         reading = latest_reading(db)
         settings = get_or_create_settings(db)
         servo_active = EnergyService.servo_active(db, now)
         buzzer_active = PowerService.buzzer_active(db)
         live_load = EnergyService.live_load_watts(config, reading, servo_active, buzzer_active)
-        last_hour_energy = EnergyService.energy_window(db, config, last_completed_hour_begin, current_hour_begin)
-        current_hour_energy = EnergyService.energy_window(db, config, current_hour_begin, now)
-        today_energy = EnergyService.energy_window(db, config, day_begin, now)
-        duty = DutyCycleService.relay_runtime(db, last_completed_hour_begin, current_hour_begin)
+        last_hour_energy = EnergyService.energy_window(db, config, last_completed_hour_begin, last_completed_hour_end)
+        current_hour_energy = EnergyService.energy_window(db, config, current_hour_begin, effective_finish)
+        today_energy = EnergyService.energy_window(db, config, day_begin, effective_finish)
+        duty = DutyCycleService.relay_runtime(db, last_completed_hour_begin, last_completed_hour_end)
         last_hour_duty_percent = round(last_hour_energy["heater_duty_percent"], 1)
         runtime_basis_watts = last_hour_energy["average_watts"] or current_hour_energy["average_watts"]
         battery = BatteryService.remaining(config, max(0.01, runtime_basis_watts), now)
@@ -105,10 +113,14 @@ class PowerService:
         relay_times = PowerService.latest_relay_times(db)
         total_kwh = today_energy["wh"] / 1000
         estimated_current = live_load / max(1, config.grid_voltage)
-        hourly_history = HistoryService.hourly_points(db, config, 24)
+        hourly_history = HistoryService.hourly_points(db, config, 24, day=selected_day, now=now)
         payload = {
             "config": PowerService.config_payload(config),
             "window_hours": 24,
+            "selected_date": selected_day.isoformat(),
+            "is_today": is_today,
+            "day_start": day_begin,
+            "day_end": day_end,
             "heater_kwh": round((config.heater_watts * duty["seconds"]) / 3600000, 4),
             "base_kwh": round(today_energy["wh"] / 1000, 4),
             "servo_kwh": 0.0,
@@ -126,10 +138,10 @@ class PowerService:
             "heater_duty_last_hour_percent": last_hour_duty_percent,
             "heater_duty_current_hour_percent": round(current_hour_energy["heater_duty_percent"], 1),
             "last_completed_hour_start": last_completed_hour_begin,
-            "last_completed_hour_end": current_hour_begin,
-            "last_completed_hour_label": f"{last_completed_hour_begin.strftime('%H:00')} - {current_hour_begin.strftime('%H:00')} GMT",
+            "last_completed_hour_end": last_completed_hour_end,
+            "last_completed_hour_label": f"{last_completed_hour_begin.strftime('%H:00')} - {last_completed_hour_end.strftime('%H:00')} GMT",
             "current_hour_start": current_hour_begin,
-            "current_hour_label": f"{current_hour_begin.strftime('%H:00')} - {(current_hour_begin + timedelta(hours=1)).strftime('%H:00')} GMT",
+            "current_hour_label": f"{current_hour_begin.strftime('%H:00')} - {(current_hour_begin + timedelta(hours=1)).strftime('%H:00')} GMT" if is_today else "Full GMT day",
             "rtc_time": now,
             "battery": battery,
             "recharge_before": battery["recharge_before"],
@@ -148,6 +160,6 @@ class PowerService:
             "hourly_history": hourly_history,
         }
         payload["report"] = PDFService.report_payload(payload)
-        if log:
+        if log and is_today:
             LoggerService.maybe_log_power(db)
         return payload

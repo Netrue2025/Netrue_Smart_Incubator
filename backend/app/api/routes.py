@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi.responses import JSONResponse
@@ -141,10 +141,10 @@ async def ota_update(file: UploadFile | None = None, db: Session = Depends(get_d
 
 
 @router.get("/reports/power.{export_format}")
-def export_power_report(export_format: str, db: Session = Depends(get_db)):
+def export_power_report(export_format: str, day: date | None = None, db: Session = Depends(get_db)):
     if export_format not in {"pdf", "csv", "xlsx"}:
         return JSONResponse(status_code=400, content={"ok": False, "message": "Unsupported report format"})
-    return power_report_response(db, export_format)
+    return power_report_response(db, export_format, day=day)
 
 
 @router.get("/system")
