@@ -141,6 +141,9 @@ export interface ServoAnalytics {
   target_angle: number;
   interval_minutes: number;
   speed_dps: number;
+  next_turn_at: string | null;
+  seconds_to_next_turn: number | null;
+  next_target_angle: number | null;
   expected_cycles_per_day: number;
   completed_today: number;
   failures_today: number;

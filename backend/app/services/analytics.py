@@ -213,11 +213,27 @@ def servo_summary(db: Session) -> dict[str, Any]:
     latest = db.scalars(select(ServoHistory).order_by(desc(ServoHistory.created_at)).limit(1)).first()
     interval = max(1, settings.tray_servo_interval_minutes)
     expected_cycles = int(1440 / interval) if settings.tray_servo_enabled else 0
+    next_turn_at = None
+    seconds_to_next_turn = None
+    next_target_angle = settings.tray_servo_angle
+    if latest and latest.success and latest.target_angle > 0:
+        next_target_angle = -settings.tray_servo_angle
+    elif latest and latest.success and latest.target_angle < 0:
+        next_target_angle = settings.tray_servo_angle
+    elif latest and not latest.success and latest.target_angle != 0:
+        next_target_angle = latest.target_angle
+    if settings.tray_servo_enabled:
+        anchor = ensure_aware_utc(latest.created_at) if latest else ensure_aware_utc(settings.updated_at)
+        next_turn_at = anchor + timedelta(minutes=interval)
+        seconds_to_next_turn = max(0, int((next_turn_at - ensure_aware_utc(now)).total_seconds()))
     return {
         "enabled": settings.tray_servo_enabled,
         "target_angle": settings.tray_servo_angle,
         "interval_minutes": interval,
         "speed_dps": settings.tray_servo_speed_dps,
+        "next_turn_at": next_turn_at,
+        "seconds_to_next_turn": seconds_to_next_turn,
+        "next_target_angle": next_target_angle if settings.tray_servo_enabled else None,
         "expected_cycles_per_day": expected_cycles,
         "completed_today": completed_today,
         "failures_today": failures_today,

@@ -12,6 +12,7 @@ type ServoHistoryRow = NonNullable<ServoAnalyticsPayload["last_event"]>;
 export function ServoAnalytics() {
   const [data, setData] = useState<ServoAnalyticsPayload | null>(null);
   const [history, setHistory] = useState<ServoHistoryRow[]>([]);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
     Promise.all([incubatorApi.servo(), incubatorApi.analyticsHistory("servo", 20)])
@@ -22,19 +23,33 @@ export function ServoAnalytics() {
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   if (!data) return <Skeleton className="h-[70vh] w-full" />;
 
   const completion = data.expected_cycles_per_day ? Math.min(100, Math.round((data.completed_today / data.expected_cycles_per_day) * 100)) : 0;
   const failureNote = data.failure_reasons.length
     ? data.failure_reasons.map((item) => `${formatTime(item.created_at)}: ${item.message}`).join("\n")
     : "No failed turns recorded today";
+  const nextTurnMs = data.next_turn_at ? new Date(data.next_turn_at).getTime() : null;
+  const countdownSeconds = nextTurnMs ? Math.max(0, Math.ceil((nextTurnMs - nowMs) / 1000)) : null;
+  const countdownLabel =
+    countdownSeconds === null
+      ? "--"
+      : countdownSeconds <= 0
+        ? "Due now"
+        : `${Math.floor(countdownSeconds / 3600)}h ${Math.floor((countdownSeconds % 3600) / 60)}m ${countdownSeconds % 60}s`;
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <StatusCard label="Tray Turning" value={data.enabled ? "Enabled" : "Disabled"} icon={<RotateCw />} />
         <StatusCard label="Target Angle" value={`${data.target_angle} deg`} />
         <StatusCard label="Interval" value={`${data.interval_minutes} min`} icon={<Timer />} />
+        <StatusCard label="Next Move" value={countdownLabel} icon={<Timer />} />
         <Card title={failureNote}>
           <CardContent className="flex min-h-24 items-center justify-between gap-3">
             <div>
@@ -57,6 +72,11 @@ export function ServoAnalytics() {
             <p><span className="text-foreground/60">Completed today:</span> {data.completed_today}</p>
             <p><span className="text-foreground/60">Expected cycles:</span> {data.expected_cycles_per_day}</p>
             <p><span className="text-foreground/60">Profile turning:</span> {data.profile_turning_enabled ? "Allowed" : "Paused"}</p>
+          </div>
+          <div className="grid gap-3 text-sm sm:grid-cols-3">
+            <p><span className="text-foreground/60">Next target:</span> {data.next_target_angle === null ? "--" : `${data.next_target_angle > 0 ? "+" : ""}${data.next_target_angle} deg`}</p>
+            <p><span className="text-foreground/60">Next time:</span> {data.next_turn_at ? formatTime(data.next_turn_at) : "--"}</p>
+            <p><span className="text-foreground/60">Countdown:</span> {countdownLabel}</p>
           </div>
           <p className="text-sm text-foreground/60">
             Last event: {data.last_event ? `${data.last_event.event_type} at ${formatTime(data.last_event.created_at)}` : "Waiting for servo events"}
