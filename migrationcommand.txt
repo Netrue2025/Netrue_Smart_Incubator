@@ -1,0 +1,3 @@
+$env:PYTHONPATH="backend"
+$env:DATABASE_URL="your encoded mysql+pymysql URL"
+.\.venv313\Scripts\python.exe -m alembic upgrade head

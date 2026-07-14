@@ -144,6 +144,7 @@ export interface ServoAnalytics {
   expected_cycles_per_day: number;
   completed_today: number;
   failures_today: number;
+  failure_reasons: Array<{ id: number; message: string; target_angle: number; created_at: string }>;
   profile_turning_enabled: boolean;
   last_event: {
     id: number;

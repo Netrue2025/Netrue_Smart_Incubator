@@ -102,3 +102,11 @@ struct Reading {
   String faultDetail = "";
   String timestamp = "";
 };
+
+struct ServoEventUpload {
+  String eventType = "turn";
+  bool success = true;
+  int targetAngle = 0;
+  float durationSeconds = 0.0f;
+  String message = "";
+};

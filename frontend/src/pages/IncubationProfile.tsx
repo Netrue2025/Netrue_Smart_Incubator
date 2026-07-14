@@ -1,4 +1,4 @@
-import { CalendarDays, Save } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Save, X } from "lucide-react";
 import type { CSSProperties, FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { incubatorApi } from "../api/client";
@@ -8,6 +8,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input, Select } from "../components/ui/input";
 import { Skeleton } from "../components/ui/skeleton";
+import type { IncubationProfile as IncubationProfileType } from "../types/incubator";
 
 type ProfileForm = {
   bird_category: string;
@@ -51,6 +52,24 @@ function emptyForm(): ProfileForm {
     turning_enabled: true,
     notes: "",
     is_active: true
+  };
+}
+
+function formFromProfile(profile: IncubationProfileType): ProfileForm {
+  return {
+    bird_category: profile.bird_category,
+    custom_bird: profile.custom_bird ?? "",
+    batch_name: profile.batch_name,
+    egg_count: profile.egg_count,
+    loading_date: profile.loading_date,
+    incubation_days: profile.incubation_days,
+    lockdown_day: profile.lockdown_day,
+    target_temperature: profile.target_temperature,
+    target_humidity: profile.target_humidity,
+    turning_enabled: profile.turning_enabled,
+    turning_disabled_day: profile.turning_disabled_day,
+    notes: profile.notes,
+    is_active: profile.is_active
   };
 }
 
@@ -150,8 +169,8 @@ function HatchCountdown({ active }: { active: ActiveIncubation | null }) {
       <Card className="overflow-hidden">
         <CardContent className="flex min-h-72 items-center justify-center text-center">
           <div>
-            <p className="text-2xl font-semibold">No active incubation profile</p>
-            <p className="mt-2 text-sm text-foreground/60">Save a profile to start the hatch countdown.</p>
+            <p className="text-2xl font-semibold">No incubation batch saved</p>
+            <p className="mt-2 text-sm text-foreground/60">Add a batch to start the hatch countdown.</p>
           </div>
         </CardContent>
       </Card>
@@ -213,32 +232,18 @@ function HatchCountdown({ active }: { active: ActiveIncubation | null }) {
 export function IncubationProfile() {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
-  const [profileId, setProfileId] = useState<number | null>(null);
-  const [active, setActive] = useState<Awaited<ReturnType<typeof incubatorApi.incubation>>["active"]>(null);
+  const [profiles, setProfiles] = useState<IncubationProfileType[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<ProfileForm>(emptyForm());
 
-  const load = async () => {
+  const load = async (preferredId?: number | null) => {
     setLoading(true);
     const payload = await incubatorApi.incubation();
-    setActive(payload.active);
-    if (payload.active) {
-      setProfileId(payload.active.id);
-      setForm({
-        bird_category: payload.active.bird_category,
-        custom_bird: payload.active.custom_bird ?? "",
-        batch_name: payload.active.batch_name,
-        egg_count: payload.active.egg_count,
-        loading_date: payload.active.loading_date,
-        incubation_days: payload.active.incubation_days,
-        lockdown_day: payload.active.lockdown_day,
-        target_temperature: payload.active.target_temperature,
-        target_humidity: payload.active.target_humidity,
-        turning_enabled: payload.active.turning_enabled,
-        turning_disabled_day: payload.active.turning_disabled_day,
-        notes: payload.active.notes,
-        is_active: payload.active.is_active
-      });
-    }
+    setProfiles(payload.profiles);
+    const nextSelected = payload.profiles.find((profile) => profile.id === preferredId) ?? payload.active ?? payload.profiles[0] ?? null;
+    setSelectedId(nextSelected?.id ?? null);
     setLoading(false);
   };
 
@@ -246,70 +251,140 @@ export function IncubationProfile() {
     load().catch(console.error);
   }, []);
 
+  const selectedIndex = profiles.findIndex((profile) => profile.id === selectedId);
+  const selected = selectedIndex >= 0 ? profiles[selectedIndex] : profiles[0] ?? null;
+  const canGoPrevious = selectedIndex > 0;
+  const canGoNext = selectedIndex >= 0 && selectedIndex < profiles.length - 1;
+
   const setBird = (bird: string) => {
     setForm({ ...form, bird_category: bird, ...(defaults[bird] ?? defaults.custom) });
+  };
+
+  const openNewBatch = () => {
+    setEditingId(null);
+    setForm(emptyForm());
+    setModalOpen(true);
+  };
+
+  const openEditBatch = () => {
+    if (!selected) return;
+    setEditingId(selected.id);
+    setForm(formFromProfile(selected));
+    setModalOpen(true);
   };
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
     const payload = { ...form, custom_bird: form.bird_category === "custom" ? form.custom_bird : null };
-    if (profileId) {
-      await incubatorApi.updateIncubation(profileId, payload as never);
+    let saved: IncubationProfileType;
+    if (editingId) {
+      saved = await incubatorApi.updateIncubation(editingId, payload as never);
     } else {
-      await incubatorApi.saveIncubation(payload as never);
+      saved = await incubatorApi.saveIncubation(payload as never);
     }
-    toast("Incubation profile saved");
-    await load();
+    toast(editingId ? "Batch updated" : "Batch created");
+    setModalOpen(false);
+    setEditingId(null);
+    await load(saved.id);
   };
 
   if (loading) return <Skeleton className="h-[70vh] w-full" />;
 
   return (
-    <form className="space-y-6" onSubmit={save}>
-      <HatchCountdown active={active} />
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatusCard label="Current Day" value={active ? `Day ${active.current_day}` : "Not set"} icon={<CalendarDays />} />
-        <StatusCard label="Expected Hatch" value={active ? new Date(active.expected_hatch_date).toLocaleDateString() : "--"} />
-        <StatusCard label="Progress" value={active ? `${active.progress_percent}%` : "--"} />
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button type="button" className="bg-muted px-3 text-foreground" onClick={() => canGoPrevious && setSelectedId(profiles[selectedIndex - 1].id)} disabled={!canGoPrevious} title="Previous batch">
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <div className="min-w-48">
+            <p className="text-xs uppercase tracking-wide text-foreground/60">Batch</p>
+            <p className="text-lg font-semibold">{selected ? selected.batch_name : "No batch saved"}</p>
+          </div>
+          <Button type="button" className="bg-muted px-3 text-foreground" onClick={() => canGoNext && setSelectedId(profiles[selectedIndex + 1].id)} disabled={!canGoNext} title="Next batch">
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" className="bg-muted text-foreground" onClick={openEditBatch} disabled={!selected}>
+            <Pencil className="h-5 w-5" /> Edit Batch
+          </Button>
+          <Button type="button" onClick={openNewBatch}>
+            <Plus className="h-5 w-5" /> Add Batch
+          </Button>
+        </div>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Incubation Profile</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2 text-sm">
-            Bird category
-            <Select value={form.bird_category} onChange={(event) => setBird(event.target.value)}>
-              <option value="chicken">Chicken</option>
-              <option value="duck">Duck</option>
-              <option value="quail">Quail</option>
-              <option value="turkey">Turkey</option>
-              <option value="goose">Goose</option>
-              <option value="custom">Custom</option>
-            </Select>
-          </label>
-          {form.bird_category === "custom" && (
-            <label className="space-y-2 text-sm">Custom bird<Input value={form.custom_bird} onChange={(event) => setForm({ ...form, custom_bird: event.target.value })} /></label>
-          )}
-          <label className="space-y-2 text-sm">Batch name<Input value={form.batch_name} onChange={(event) => setForm({ ...form, batch_name: event.target.value })} /></label>
-          <label className="space-y-2 text-sm">Egg count<Input type="number" value={form.egg_count} onChange={(event) => setForm({ ...form, egg_count: Number(event.target.value) })} /></label>
-          <label className="space-y-2 text-sm">Loading date<Input type="date" value={form.loading_date} onChange={(event) => setForm({ ...form, loading_date: event.target.value })} /></label>
-          <label className="space-y-2 text-sm">Incubation days<Input type="number" value={form.incubation_days} onChange={(event) => setForm({ ...form, incubation_days: Number(event.target.value) })} /></label>
-          <label className="space-y-2 text-sm">Lockdown day<Input type="number" value={form.lockdown_day} onChange={(event) => setForm({ ...form, lockdown_day: Number(event.target.value) })} /></label>
-          <label className="space-y-2 text-sm">Stop turning day<Input type="number" value={form.turning_disabled_day} onChange={(event) => setForm({ ...form, turning_disabled_day: Number(event.target.value) })} /></label>
-          <label className="space-y-2 text-sm">Target temperature<Input type="number" step="0.1" value={form.target_temperature} onChange={(event) => setForm({ ...form, target_temperature: Number(event.target.value) })} /></label>
-          <label className="space-y-2 text-sm">Target humidity<Input type="number" step="0.1" value={form.target_humidity} onChange={(event) => setForm({ ...form, target_humidity: Number(event.target.value) })} /></label>
-          <label className="flex items-center gap-3 text-sm md:col-span-2">
-            <input type="checkbox" checked={form.turning_enabled} onChange={(event) => setForm({ ...form, turning_enabled: event.target.checked })} />
-            Enable tray turning for this profile
-          </label>
-          <label className="space-y-2 text-sm md:col-span-2">
-            Notes
-            <textarea className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-          </label>
-        </CardContent>
-      </Card>
-      <Button type="submit"><Save size={18} /> Save Profile</Button>
-    </form>
+
+      <HatchCountdown active={selected} />
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatusCard label="Current Day" value={selected ? `Day ${selected.current_day}` : "Not set"} icon={<CalendarDays />} />
+        <StatusCard label="Expected Hatch" value={selected ? new Date(selected.expected_hatch_date).toLocaleDateString() : "--"} />
+        <StatusCard label="Progress" value={selected ? `${selected.progress_percent}%` : "--"} />
+      </div>
+
+      {selected ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{selected.batch_name}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm md:grid-cols-4">
+            <div><span className="text-foreground/60">Bird:</span> {selected.bird_category === "custom" ? selected.custom_bird || "Custom" : selected.bird_category}</div>
+            <div><span className="text-foreground/60">Eggs:</span> {selected.egg_count}</div>
+            <div><span className="text-foreground/60">Loaded:</span> {new Date(selected.loading_date).toLocaleDateString()}</div>
+            <div><span className="text-foreground/60">Lockdown:</span> Day {selected.lockdown_day}</div>
+            {selected.notes ? <p className="md:col-span-4 text-foreground/70">{selected.notes}</p> : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {modalOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4">
+          <form className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-md border border-border bg-card shadow-panel" onSubmit={save}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card p-4">
+              <h2 className="text-lg font-semibold">{editingId ? "Edit Batch" : "Add Batch"}</h2>
+              <Button type="button" className="bg-muted px-3 text-foreground" onClick={() => setModalOpen(false)} title="Close">
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="grid gap-4 p-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm">
+                Bird category
+                <Select value={form.bird_category} onChange={(event) => setBird(event.target.value)}>
+                  <option value="chicken">Chicken</option>
+                  <option value="duck">Duck</option>
+                  <option value="quail">Quail</option>
+                  <option value="turkey">Turkey</option>
+                  <option value="goose">Goose</option>
+                  <option value="custom">Custom</option>
+                </Select>
+              </label>
+              {form.bird_category === "custom" && (
+                <label className="space-y-2 text-sm">Custom bird<Input value={form.custom_bird} onChange={(event) => setForm({ ...form, custom_bird: event.target.value })} /></label>
+              )}
+              <label className="space-y-2 text-sm">Batch name<Input value={form.batch_name} onChange={(event) => setForm({ ...form, batch_name: event.target.value })} /></label>
+              <label className="space-y-2 text-sm">Egg count<Input type="number" value={form.egg_count} onChange={(event) => setForm({ ...form, egg_count: Number(event.target.value) })} /></label>
+              <label className="space-y-2 text-sm">Loading date<Input type="date" value={form.loading_date} onChange={(event) => setForm({ ...form, loading_date: event.target.value })} /></label>
+              <label className="space-y-2 text-sm">Incubation days<Input type="number" value={form.incubation_days} onChange={(event) => setForm({ ...form, incubation_days: Number(event.target.value) })} /></label>
+              <label className="space-y-2 text-sm">Lockdown day<Input type="number" value={form.lockdown_day} onChange={(event) => setForm({ ...form, lockdown_day: Number(event.target.value) })} /></label>
+              <label className="space-y-2 text-sm">Stop turning day<Input type="number" value={form.turning_disabled_day} onChange={(event) => setForm({ ...form, turning_disabled_day: Number(event.target.value) })} /></label>
+              <label className="space-y-2 text-sm">Target temperature<Input type="number" step="0.1" value={form.target_temperature} onChange={(event) => setForm({ ...form, target_temperature: Number(event.target.value) })} /></label>
+              <label className="space-y-2 text-sm">Target humidity<Input type="number" step="0.1" value={form.target_humidity} onChange={(event) => setForm({ ...form, target_humidity: Number(event.target.value) })} /></label>
+              <label className="flex items-center gap-3 text-sm md:col-span-2">
+                <input type="checkbox" checked={form.turning_enabled} onChange={(event) => setForm({ ...form, turning_enabled: event.target.checked })} />
+                Enable tray turning for this batch
+              </label>
+              <label className="space-y-2 text-sm md:col-span-2">
+                Notes
+                <textarea className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+              </label>
+            </div>
+            <div className="sticky bottom-0 flex justify-end gap-2 border-t border-border bg-card p-4">
+              <Button type="button" className="bg-muted text-foreground" onClick={() => setModalOpen(false)}>Cancel</Button>
+              <Button type="submit"><Save size={18} /> Save Batch</Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </div>
   );
 }

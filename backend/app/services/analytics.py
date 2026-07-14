@@ -204,6 +204,12 @@ def servo_summary(db: Session) -> dict[str, Any]:
     begin = now.replace(hour=0, minute=0, second=0, microsecond=0)
     completed_today = db.scalar(select(func.count(ServoHistory.id)).where(ServoHistory.created_at >= begin, ServoHistory.success.is_(True))) or 0
     failures_today = db.scalar(select(func.count(ServoHistory.id)).where(ServoHistory.created_at >= begin, ServoHistory.success.is_(False))) or 0
+    failure_rows = db.scalars(
+        select(ServoHistory)
+        .where(ServoHistory.created_at >= begin, ServoHistory.success.is_(False))
+        .order_by(desc(ServoHistory.created_at))
+        .limit(5)
+    ).all()
     latest = db.scalars(select(ServoHistory).order_by(desc(ServoHistory.created_at)).limit(1)).first()
     interval = max(1, settings.tray_servo_interval_minutes)
     expected_cycles = int(1440 / interval) if settings.tray_servo_enabled else 0
@@ -215,6 +221,15 @@ def servo_summary(db: Session) -> dict[str, Any]:
         "expected_cycles_per_day": expected_cycles,
         "completed_today": completed_today,
         "failures_today": failures_today,
+        "failure_reasons": [
+            {
+                "id": row.id,
+                "message": row.message or "Servo turn failed",
+                "target_angle": row.target_angle,
+                "created_at": row.created_at,
+            }
+            for row in failure_rows
+        ],
         "profile_turning_enabled": bool(profile and profile_payload(profile)["turning_enabled_today"]),
         "last_event": {
             "id": latest.id,

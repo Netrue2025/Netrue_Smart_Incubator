@@ -1,4 +1,4 @@
-import { RotateCw, Timer, TriangleAlert } from "lucide-react";
+import { CheckCircle2, RotateCw, Timer, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { incubatorApi } from "../api/client";
 import { StatusCard } from "../components/StatusCard";
@@ -7,15 +7,17 @@ import { Skeleton } from "../components/ui/skeleton";
 import { formatTime } from "../lib/utils";
 import type { ServoAnalytics as ServoAnalyticsPayload } from "../types/incubator";
 
+type ServoHistoryRow = NonNullable<ServoAnalyticsPayload["last_event"]>;
+
 export function ServoAnalytics() {
   const [data, setData] = useState<ServoAnalyticsPayload | null>(null);
-  const [history, setHistory] = useState<unknown[]>([]);
+  const [history, setHistory] = useState<ServoHistoryRow[]>([]);
 
   useEffect(() => {
     Promise.all([incubatorApi.servo(), incubatorApi.analyticsHistory("servo", 20)])
       .then(([servo, rows]) => {
         setData(servo);
-        setHistory(rows.items);
+        setHistory(rows.items as ServoHistoryRow[]);
       })
       .catch(console.error);
   }, []);
@@ -23,6 +25,9 @@ export function ServoAnalytics() {
   if (!data) return <Skeleton className="h-[70vh] w-full" />;
 
   const completion = data.expected_cycles_per_day ? Math.min(100, Math.round((data.completed_today / data.expected_cycles_per_day) * 100)) : 0;
+  const failureNote = data.failure_reasons.length
+    ? data.failure_reasons.map((item) => `${formatTime(item.created_at)}: ${item.message}`).join("\n")
+    : "No failed turns recorded today";
 
   return (
     <div className="space-y-6">
@@ -30,7 +35,15 @@ export function ServoAnalytics() {
         <StatusCard label="Tray Turning" value={data.enabled ? "Enabled" : "Disabled"} icon={<RotateCw />} />
         <StatusCard label="Target Angle" value={`${data.target_angle} deg`} />
         <StatusCard label="Interval" value={`${data.interval_minutes} min`} icon={<Timer />} />
-        <StatusCard label="Failures Today" value={data.failures_today} icon={<TriangleAlert />} />
+        <Card title={failureNote}>
+          <CardContent className="flex min-h-24 items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-foreground/60">Failures Today</p>
+              <div className="mt-2 text-xl font-semibold">{data.failures_today}</div>
+            </div>
+            <div className="rounded-md bg-muted p-3 text-primary"><TriangleAlert /></div>
+          </CardContent>
+        </Card>
       </div>
       <Card>
         <CardHeader>
@@ -60,19 +73,21 @@ export function ServoAnalytics() {
               <tr><th className="py-2">Time</th><th>Event</th><th>Angle</th><th>Duration</th><th>Status</th><th>Message</th></tr>
             </thead>
             <tbody>
-              {history.map((row) => {
-                const item = row as { id: number; created_at: string; event_type: string; target_angle: number; duration_seconds: number; success: boolean; message: string };
-                return (
-                  <tr key={item.id} className="border-t border-border">
-                    <td className="py-2">{formatTime(item.created_at)}</td>
-                    <td>{item.event_type}</td>
-                    <td>{item.target_angle} deg</td>
-                    <td>{item.duration_seconds}s</td>
-                    <td>{item.success ? "OK" : "Failed"}</td>
-                    <td>{item.message || "--"}</td>
-                  </tr>
-                );
-              })}
+              {history.map((item) => (
+                <tr key={item.id} className="border-t border-border">
+                  <td className="py-2">{formatTime(item.created_at)}</td>
+                  <td>{item.event_type}</td>
+                  <td>{item.target_angle} deg</td>
+                  <td>{Number(item.duration_seconds).toFixed(1)}s</td>
+                  <td>
+                    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${item.success ? "bg-primary/10 text-primary" : "bg-red-500/10 text-red-600"}`}>
+                      {item.success ? <CheckCircle2 className="h-3.5 w-3.5" /> : <TriangleAlert className="h-3.5 w-3.5" />}
+                      {item.success ? "OK" : "Failed"}
+                    </span>
+                  </td>
+                  <td title={item.message || ""}>{item.message || "--"}</td>
+                </tr>
+              ))}
               {!history.length && <tr><td className="py-4 text-foreground/60" colSpan={6}>No servo history has been posted yet.</td></tr>}
             </tbody>
           </table>

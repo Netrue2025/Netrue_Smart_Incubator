@@ -24,6 +24,8 @@ IncubatorConfig config;
 Reading latestReading;
 Reading pendingUpload;
 bool pendingUploadReady = false;
+ServoEventUpload pendingServoEvent;
+bool pendingServoEventReady = false;
 uint8_t sensorFailures = 0;
 uint32_t relayOnSince = 0;
 uint32_t lastWifiAttempt = 0;
@@ -567,6 +569,32 @@ String readingJson(const Reading& reading) {
   return out;
 }
 
+String servoEventJson(const ServoEventUpload& event) {
+  JsonDocument doc;
+  doc["event_type"] = event.eventType;
+  doc["success"] = event.success;
+  doc["target_angle"] = event.targetAngle;
+  doc["duration_seconds"] = event.durationSeconds;
+  doc["message"] = event.message;
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+void queueServoEvent(const char* eventType, bool success, int targetAngle, float durationSeconds, const char* message) {
+  ServoEventUpload event;
+  event.eventType = eventType;
+  event.success = success;
+  event.targetAngle = targetAngle;
+  event.durationSeconds = durationSeconds;
+  event.message = message;
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  pendingServoEvent = event;
+  pendingServoEventReady = true;
+  xSemaphoreGive(stateMutex);
+  Serial.printf("Servo event queued: %s angle=%d success=%s %s\n", eventType, targetAngle, success ? "true" : "false", message);
+}
+
 void sensorTask(void*) {
   for (;;) {
     float humidity = dht.readHumidity();
@@ -721,7 +749,14 @@ void displayTask(void*) {
 void trayServoTask(void*) {
   uint32_t endpointReachedAt = 0;
   uint32_t lastStepAt = 0;
+  uint32_t lastTurnCompletedAt = 0;
+  uint32_t turnStartedAt = 0;
   int lastConfiguredAngle = -1;
+  int nextTurnSide = 1;
+  int activeTurnSide = 1;
+  bool turnActive = false;
+  bool passingHome = false;
+  bool failureLoggedForTurn = false;
   for (;;) {
     xSemaphoreTake(stateMutex, portMAX_DELAY);
     IncubatorConfig localConfig = config;
@@ -735,6 +770,9 @@ void trayServoTask(void*) {
 
     if (!enabled) {
       trayServoWasEnabled = false;
+      turnActive = false;
+      passingHome = false;
+      failureLoggedForTurn = false;
       releaseTrayServo();
       vTaskDelay(pdMS_TO_TICKS(100));
       continue;
@@ -745,9 +783,15 @@ void trayServoTask(void*) {
       trayServoLastSide = trayServoCurrentAngle > 0 ? 1 : (trayServoCurrentAngle < 0 ? -1 : 0);
       lastConfiguredAngle = configuredAngle;
       endpointReachedAt = now;
+      lastTurnCompletedAt = now;
+      turnStartedAt = 0;
+      turnActive = false;
+      passingHome = false;
+      failureLoggedForTurn = false;
+      nextTurnSide = trayServoLastSide > 0 ? -1 : 1;
       trayServoWasEnabled = true;
       Serial.printf(
-        "Tray servo enabled: -%d/0/+%d degrees, interval=%d min, speed=%d dps\n",
+        "Tray servo enabled: alternate +%d/-%d degrees every %d min, speed=%d dps\n",
         configuredAngle,
         configuredAngle,
         localConfig.trayServoIntervalMinutes,
@@ -755,9 +799,27 @@ void trayServoTask(void*) {
       );
     }
 
+    if (configuredAngle <= 0) {
+      if (!failureLoggedForTurn && now - lastTurnCompletedAt >= intervalMs) {
+        queueServoEvent("turn", false, 0, 0.0f, "Target angle is 0 degrees; increase tray servo angle");
+        failureLoggedForTurn = true;
+        lastTurnCompletedAt = now;
+      }
+      vTaskDelay(pdMS_TO_TICKS(250));
+      continue;
+    }
+
     if (trayServoCurrentAngle != trayServoTargetAngle && now - lastStepAt >= stepMs) {
       trayServoCurrentAngle += trayServoCurrentAngle < trayServoTargetAngle ? 1 : -1;
       if (!writeTrayServoAngle(trayServoCurrentAngle)) {
+        if (!failureLoggedForTurn) {
+          const float duration = turnStartedAt > 0 ? (float)(now - turnStartedAt) / 1000.0f : 0.0f;
+          queueServoEvent("turn", false, trayServoTargetAngle, duration, "Servo PWM attach/write failed on GPIO18");
+          failureLoggedForTurn = true;
+        }
+        turnActive = false;
+        passingHome = false;
+        lastTurnCompletedAt = now;
         vTaskDelay(pdMS_TO_TICKS(500));
         continue;
       }
@@ -766,27 +828,36 @@ void trayServoTask(void*) {
         endpointReachedAt = now;
         saveTrayServoPosition(trayServoCurrentAngle);
         Serial.printf("Tray servo reached %d degrees\n", trayServoCurrentAngle);
+        if (turnActive && passingHome && trayServoTargetAngle == SERVO_HOME_ANGLE) {
+          passingHome = false;
+          trayServoTargetAngle = activeTurnSide * configuredAngle;
+          endpointReachedAt = 0;
+          Serial.printf("Tray servo target %d degrees\n", trayServoTargetAngle);
+        } else if (turnActive && trayServoTargetAngle != SERVO_HOME_ANGLE) {
+          const float duration = (float)(now - turnStartedAt) / 1000.0f;
+          char message[96];
+          snprintf(message, sizeof(message), "Turned to %+d degrees", activeTurnSide * configuredAngle);
+          queueServoEvent("turn", true, activeTurnSide * configuredAngle, duration, message);
+          trayServoLastSide = activeTurnSide;
+          nextTurnSide = activeTurnSide > 0 ? -1 : 1;
+          turnActive = false;
+          passingHome = false;
+          failureLoggedForTurn = false;
+          lastTurnCompletedAt = now;
+        }
       }
     } else if (trayServoCurrentAngle == trayServoTargetAngle) {
       if (endpointReachedAt == 0) endpointReachedAt = now;
       if (trayServoPwmAttached && now - lastStepAt >= SERVO_RELEASE_DELAY_MS) {
         releaseTrayServo();
       }
-      if (trayServoTargetAngle == SERVO_HOME_ANGLE) {
-        if (trayServoLastSide == 0) {
-          if (now - endpointReachedAt >= intervalMs) {
-            trayServoTargetAngle = configuredAngle;
-            endpointReachedAt = 0;
-            Serial.printf("Tray servo target %d degrees\n", trayServoTargetAngle);
-          }
-        } else {
-          trayServoTargetAngle = trayServoLastSide > 0 ? -configuredAngle : configuredAngle;
-          endpointReachedAt = 0;
-          Serial.printf("Tray servo target %d degrees\n", trayServoTargetAngle);
-        }
-      } else if (now - endpointReachedAt >= intervalMs) {
-        trayServoLastSide = trayServoTargetAngle > 0 ? 1 : -1;
-        trayServoTargetAngle = SERVO_HOME_ANGLE;
+      if (!turnActive && now - lastTurnCompletedAt >= intervalMs) {
+        activeTurnSide = nextTurnSide;
+        turnStartedAt = now;
+        turnActive = true;
+        failureLoggedForTurn = false;
+        passingHome = trayServoCurrentAngle != SERVO_HOME_ANGLE;
+        trayServoTargetAngle = passingHome ? SERVO_HOME_ANGLE : activeTurnSide * configuredAngle;
         endpointReachedAt = 0;
         Serial.printf("Tray servo target %d degrees\n", trayServoTargetAngle);
       }
@@ -880,6 +951,30 @@ void syncTask(void*) {
       } else {
         enqueueReading(uploadReading);
       }
+    }
+
+    ServoEventUpload servoEvent;
+    bool hasServoEvent = false;
+    xSemaphoreTake(stateMutex, portMAX_DELAY);
+    if (pendingServoEventReady) {
+      servoEvent = pendingServoEvent;
+      pendingServoEventReady = false;
+      hasServoEvent = true;
+    }
+    xSemaphoreGive(stateMutex);
+
+    if (hasServoEvent && WiFi.status() == WL_CONNECTED) {
+      if (!httpSuccess(postJson("/api/servo", servoEventJson(servoEvent)))) {
+        xSemaphoreTake(stateMutex, portMAX_DELAY);
+        pendingServoEvent = servoEvent;
+        pendingServoEventReady = true;
+        xSemaphoreGive(stateMutex);
+      }
+    } else if (hasServoEvent) {
+      xSemaphoreTake(stateMutex, portMAX_DELAY);
+      pendingServoEvent = servoEvent;
+      pendingServoEventReady = true;
+      xSemaphoreGive(stateMutex);
     }
 
     if (WiFi.status() == WL_CONNECTED) {
